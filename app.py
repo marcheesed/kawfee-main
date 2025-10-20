@@ -15,6 +15,9 @@ import re
 from jinja2 import pass_environment
 import bleach
 import datetime
+from typing import Any
+
+note: Any = None
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  # Replace with a real secret
@@ -493,10 +496,12 @@ def submit():
     if not logged_in():
         return redirect(url_for("login"))
 
-    # Load tags from tags.json file
-    tags_file_path = os.path.join(os.path.dirname(__file__), "tags.json")
-    with open(tags_file_path, "r") as f:
-        tags = json.load(f)
+    # Load data.json
+    with open("data.json", "r") as f:
+        data = json.load(f)
+
+    # Get tags from data.json
+    tags = data.get("tags", [])
 
     if request.method == "POST":
         # Generate new ID
@@ -547,12 +552,11 @@ def submit():
             "Data before saving:", repr(data["fanfics"][-1]["chapters"][0]["content"])
         )
 
-        # Define save_data function outside or before the route
+        # Save data back to data.json
         def save_data(data):
             with open("data.json", "w") as f:
                 json.dump(data, f)
 
-        # Call save_data after updating
         save_data(data)
 
         return redirect(url_for("view_fic", fid=new_fic["id"]))
@@ -708,7 +712,11 @@ def delete_user(username):
         return "Access Denied", 403
     if username in data["users"]:
         del data["users"][username]
-        save_data()
+
+    def save_data(data):
+        with open("data.json", "w") as f:
+            json.dump(data, f)
+
     return redirect(url_for("admin_panel"))
 
 
@@ -717,7 +725,11 @@ def delete_fic_admin(fic_id):
     if not is_admin():
         return "Access Denied", 403
     data["fanfics"] = [f for f in data["fanfics"] if f["id"] != fic_id]
-    save_data()
+
+    def save_data(data):
+        with open("data.json", "w") as f:
+            json.dump(data, f)
+
     return redirect(url_for("admin_panel"))
 
 
@@ -764,7 +776,11 @@ def add_kudo(fid):
     user = session["username"]
     if user not in fic["kudos"]:
         fic["kudos"].append(user)
-        save_data()
+
+        def save_data(data):
+            with open("data.json", "w") as f:
+                json.dump(data, f)
+
     return redirect(url_for("view_fic", fid=fid))
 
 
@@ -798,25 +814,41 @@ def notes():
     )
 
 
-# Route to view a specific note
 @app.route("/notes/<note_id>")
 def view_note(note_id):
-    data = load_data()
-    note = data.get("notes", {}).get(note_id)
+    # Fetch the note directly from the dictionary by string key
+    note = data["notes"].get(str(note_id))
     if not note:
         abort(404)
-    username = session.get("username")
-    user = get_user(username) if username else None
-    notes = data.get("notes", {})
-    logged_in = "username" in session
+
+    # Handle if note is a string or a dictionary
+    if isinstance(note, str):
+        note_content = note
+    elif isinstance(note, dict):
+        note_content = note.get("content", "")
+    else:
+        # Unexpected data type
+        abort(500)
+
+    # Normalize whitespace
+    import re
+
+    note_content = re.sub(r"\n\s*\n+", "\n\n", note_content)
+
+    # Prepare context data (replace with actual user info and login status)
+    context = {
+        "user": "example_user",  # Replace with actual user info
+        "logged_in": True,  # Replace with actual login status
+        "notes": data["notes"],
+    }
 
     return render_template(
         "view_note.html",
         note_id=note_id,
-        note=note,
-        user=user,
-        notes=notes,
-        logged_in=logged_in,
+        note=note_content,
+        user=context["user"],
+        notes=context["notes"],
+        logged_in=context["logged_in"],
     )
 
 
@@ -855,23 +887,41 @@ def new_note():
 
 
 # Route to edit a note
+
+
+@app.route("/notes/<note_id>/edit", methods=["GET", "POST"])
+def edit_note(note_id):
+    # Fetch the note; note_id is a string key
+    note = data["notes"].get(str(note_id))
+    if not note:
+        abort(404)
+
+    if request.method == "POST":
+        # Get updated note content from form
+        new_content = request.form.get("content")
+        if new_content is None:
+            # Handle error or re-render form with error message
+            return render_template(
+                "edit_note.html", note=note, error="Content cannot be empty"
+            )
+        # Save the updated content
+        # If the note is a string
+        if isinstance(note, str):
+            data["notes"][str(note_id)] = new_content
+        elif isinstance(note, dict):
+            note["content"] = new_content
+        else:
+            abort(500)
+        # Redirect back to the note view page after saving
+        return redirect(url_for("view_note", note_id=note_id))
+    else:
+        # Render the edit form
+        return render_template("edit_note.html", note=note)
+
+
 def save_data(data):
     with open("data.json", "w") as f:
         json.dump(data, f)
-
-
-@app.route("/notes/<note_id>")
-def view_note(note_id):
-    data = load_data()
-    notes = data.get("notes", {})
-    note = notes.get(note_id, "")
-
-    # Normalize whitespace: reduce multiple blank lines to a single blank line
-    import re
-
-    note = re.sub(r"\n\s*\n+", "\n\n", note)
-
-    return render_template("view_note.html", note=note)
 
 
 @app.template_filter("nl2br")
