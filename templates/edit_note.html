@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Edit Note {{ note_id }}</title>
+    </head>
+    <body>
+        <div class="site-header">
+            <button
+                type="button"
+                id="theme-toggle"
+                aria-label="Toggle dark mode"
+                style="
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                "
+            >
+                <!-- Sun icon (light mode) -->
+                <svg
+                    id="icon-sun"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style="display: inline"
+                >
+                    <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
+                    <g stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line
+                            x1="18.36"
+                            y1="18.36"
+                            x2="19.78"
+                            y2="19.78"
+                        ></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </g>
+                </svg>
+                <!-- Moon icon (dark mode) -->
+                <svg
+                    id="icon-moon"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style="display: none"
+                >
+                    <path
+                        d="M21 12.79A9 9 0 0112.21 3a7 7 0 100 14 9 9 0 008.79-4.21z"
+                        fill="currentColor"
+                    ></path>
+                </svg>
+            </button>
+            {% if logged_in %}
+            <p style="margin-top: 30px; width: 550px">
+                Logged in as
+                <a href="{{ url_for('profile') }}">{{ session['username'] }}</a>
+                --- <a href="{{ url_for('logout') }}">Logout</a>
+            </p>
+            {% else %}
+            <p>
+                <a href="{{ url_for('login') }}">Login</a> ---
+                <a href="{{ url_for('register') }}">Register</a>
+            </p>
+            {% endif %}
+        </div>
+
+        <h1>Edit Note {{ note_id }}</h1>
+        <form
+            method="post"
+            action="{{ url_for('edit_note', note_id=note_id) }}"
+        >
+            <label for="content">Content:</label><br />
+            <textarea id="content" name="content" rows="20" cols="80">
+{{ note | safe }}</textarea
+            ><br /><br />
+            <button type="submit">Save</button>
+        </form>
+        <div class="site-footer" style="text-align: left">
+            <p>
+                <a href="{{ url_for('index') }}">Index</a> ---
+                <a href="{{ url_for('logout') }}">Logout</a> ---
+                <a href="{{ url_for('view_note', note_id=note_id) }}">Cancel</a>
+                {% if is_admin %} ---
+                <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                {% endif %}
+            </p>
+        </div>
+    </body>
+</html>

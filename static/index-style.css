@@ -1,0 +1,217 @@
+/* Define CSS variables for light theme as default */
+:root {
+    --bg-color: #f5f1e9;
+    --text-color: #4b3a2f;
+    --border-color: #d2b48c;
+    --heading-color: #8b5e3c;
+    --subheading-color: #6b4f3b;
+    --subsubheading-color: #7b5e57;
+    --span-bg: #f0e2d0;
+    --input-bg: #fffaf0;
+    --button-bg: #a67c52;
+    --button-hover-bg: #8b6d3b;
+    --link-color: #a67c52;
+    --shadow-color: rgba(0, 0, 0, 0.2);
+    --card-bg: #fff8f0;
+    --card-border: #d2b48c;
+}
+
+/* Dark theme overrides */
+body.dark-theme {
+    --bg-color: #332b26; /* darker background for dark mode */
+    --text-color: #f7e3cb; /* lighter text */
+    --border-color: #f3cfbc; /* darker borders */
+    --heading-color: #d9a066; /* warm accent for headings */
+    --subheading-color: #d2b48c; /* softer subheadings */
+    --subsubheading-color: #cbb4a4;
+    --span-bg: #4b2b1f; /* darker span background for dark mode */
+    --input-bg: #302619; /* darker input background */
+    --button-bg: #8b6d3b; /* brown button for dark mode */
+    --button-hover-bg: #6b4f3b;
+    --link-color: #d9a066;
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    --card-bg: #3b2f20;
+    --card-border: #685044;
+}
+
+/* Apply variables throughout your styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Body styling with background and font */
+body {
+    font-family: "Georgia", serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-image:
+        radial-gradient(
+            circle at 1px 1px,
+            var(--bg-color) 1px,
+            transparent 1px
+        ),
+        radial-gradient(circle at 4px 4px, var(--bg-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Headings */
+h1 {
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    font-size: 2.8em;
+    margin-bottom: 0.2em;
+    letter-spacing: 2px;
+    color: var(--heading-color);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.3em;
+    text-align: center;
+}
+
+h2 {
+    font-family: "Georgia", serif;
+    font-size: 2em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    border-left: 4px solid var(--border-color);
+    padding-left: 10px;
+    background-color: var(--bg-color);
+    padding: 0.2em 0.5em;
+    color: var(--heading-color);
+}
+
+h3 {
+    font-family: "Georgia", serif;
+    font-size: 1.4em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 0.2em;
+    color: var(--subheading-color);
+}
+
+h4 {
+    font-family: "Georgia", serif;
+    font-weight: normal;
+    font-size: 1.2em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--subsubheading-color);
+}
+
+/* Paragraphs */
+p {
+    margin: 0.5em 0;
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+}
+
+/* Inline spans */
+span {
+    display: inline-block;
+    background-color: var(--span-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 0.2em 0.4em;
+    margin-right: 0.3em;
+    font-size: 0.9em;
+    font-family: "Georgia", serif;
+}
+
+/* Lists */
+ul {
+    list-style-type: square;
+    margin-left: 20px;
+}
+
+/* Forms */
+form {
+    margin-top: 1em;
+}
+
+/* Inputs and textarea */
+input[type="text"],
+textarea {
+    width: 60%;
+    padding: 0.6em;
+    margin-top: 0.2em;
+    margin-bottom: 0.8em;
+    border: 2px solid var(--card-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    font-family: "Georgia", serif;
+    font-size: 1em;
+    box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Specific width for name input if needed */
+#name {
+    width: 30%;
+}
+
+/* Buttons */
+button {
+    background-color: var(--button-bg);
+    color: #fff;
+    border: none;
+    padding: 0.7em 1.4em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "Georgia", serif;
+    font-size: 1em;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: var(--button-hover-bg);
+}
+
+/* Links */
+a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Card styles for fanfic or content blocks */
+.fic-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 2px 2px 6px var(--shadow-color);
+}
+.fic-card a {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: var(--link-color);
+    text-decoration: none;
+}
+.fic-card a:hover {
+    text-decoration: underline;
+}
+
+/* Site header styling */
+.site-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+}
+
+#icon-sun {
+    color: var(--text-color);
+}
+
+#icon-moon {
+    color: var(--text-color);
+}
+
+#fic-title {
+    font-size: 1.5rem;
+}

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>kawfee.net</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='index-style.css') }}"
+        />
+    </head>
+    <body>
+        <div class="site-header">
+            <button
+                type="button"
+                id="theme-toggle"
+                aria-label="Toggle dark mode"
+                style="
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                "
+            >
+                <!-- Sun icon (light mode) -->
+                <svg
+                    id="icon-sun"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style="display: inline"
+                >
+                    <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
+                    <g stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line
+                            x1="18.36"
+                            y1="18.36"
+                            x2="19.78"
+                            y2="19.78"
+                        ></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </g>
+                </svg>
+                <!-- Moon icon (dark mode) -->
+                <svg
+                    id="icon-moon"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style="display: none"
+                >
+                    <path
+                        d="M21 12.79A9 9 0 0112.21 3a7 7 0 100 14 9 9 0 008.79-4.21z"
+                        fill="currentColor"
+                    ></path>
+                </svg>
+            </button>
+            {% if logged_in %}
+            <p>
+                Logged in as
+                <a href="{{ url_for('profile') }}">{{ session['username'] }}</a>
+            </p>
+            {% else %}
+            <p>
+                <a href="{{ url_for('login') }}">Login</a> ---
+                <a href="{{ url_for('register') }}">Register</a>
+            </p>
+            {% endif %}
+        </div>
+        <div
+            style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                max-width: 800px;
+                margin: 0 auto 30px auto;
+            "
+        >
+            <h1 style="margin: 0">kawfee.net</h1>
+            <!-- Search form with extra top margin for spacing -->
+            <form
+                method="get"
+                action="{{ url_for('index') }}"
+                style="
+                    display: flex;
+                    gap: 10px;
+                    align-items: center;
+                    margin-top: 30px;
+                "
+            >
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search by title or author"
+                    value="{{ search_query }}"
+                    style="
+                        padding: 8px 12px;
+                        border-radius: 4px;
+                        font-family:
+                            &quot;Helvetica Neue&quot;, Helvetica, Arial,
+                            sans-serif;
+                        font-size: 14px;
+                    "
+                />
+                <button
+                    type="submit"
+                    style="
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-family:
+                            &quot;Helvetica Neue&quot;, Helvetica, Arial,
+                            sans-serif;
+                        font-size: 14px;
+                        margin-bottom: 8px;
+                    "
+                >
+                    Search
+                </button>
+                {% if current_tag %}
+                <input type="hidden" name="tag" value="{{ current_tag }}" />
+                {% endif %}
+            </form>
+        </div>
+        <!-- Fanfic list -->
+        <div class="fanfic-list">
+            {% for fic in fanfics %}
+            <div class="fic-card">
+                <a id="fic-title" href="{{ url_for('view_fic', fid=fic.id) }}"
+                    >{{ fic.title }}</a
+                >
+                <p>
+                    by
+                    <a href="{{ url_for('user_profile', username=fic.author) }}"
+                        >{{ fic.author }}</a
+                    >
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% if logged_in %}
+        <div class="submit-link">
+            <a href="{{ url_for('logout') }}">Logout</a> ---
+            <a href="{{ url_for('submit') }}">Submit a new fanfic</a>
+            {% if is_admin %} ---
+            <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    </body>
+</html>

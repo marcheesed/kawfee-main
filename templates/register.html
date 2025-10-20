@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Register</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='register.css') }}"
+        />
+    </head>
+    <body>
+        <div class="register-container">
+            <div class="site-header">
+                <button
+                    type="button"
+                    id="theme-toggle"
+                    aria-label="Toggle dark mode"
+                    style="
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                    "
+                >
+                    <!-- Sun icon (light mode) -->
+                    <svg
+                        id="icon-sun"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style="display: inline"
+                    >
+                        <circle
+                            cx="12"
+                            cy="12"
+                            r="5"
+                            fill="currentColor"
+                        ></circle>
+                        <g stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line
+                                x1="4.22"
+                                y1="4.22"
+                                x2="5.64"
+                                y2="5.64"
+                            ></line>
+                            <line
+                                x1="18.36"
+                                y1="18.36"
+                                x2="19.78"
+                                y2="19.78"
+                            ></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line
+                                x1="4.22"
+                                y1="19.78"
+                                x2="5.64"
+                                y2="18.36"
+                            ></line>
+                            <line
+                                x1="18.36"
+                                y1="5.64"
+                                x2="19.78"
+                                y2="4.22"
+                            ></line>
+                        </g>
+                    </svg>
+                    <!-- Moon icon (dark mode) -->
+                    <svg
+                        id="icon-moon"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style="display: none"
+                    >
+                        <path
+                            d="M21 12.79A9 9 0 0112.21 3a7 7 0 100 14 9 9 0 008.79-4.21z"
+                            fill="currentColor"
+                        ></path>
+                    </svg>
+                </button>
+                {% if logged_in %}
+                <p>
+                    Logged in as
+                    <a href="{{ url_for('profile') }}"
+                        >{{ session['username'] }}</a
+                    >
+                </p>
+                {% else %}
+                <p>
+                    <a href="{{ url_for('login') }}">Login</a> ---
+                    <a href="{{ url_for('register') }}">Register</a>
+                </p>
+                {% endif %}
+            </div>
+            <div class="container">
+                <h1>Register</h1>
+                <form method="POST">
+                    <label>Username</label><br />
+                    <input type="text" name="username" required /><br />
+                    <label>Password</label><br />
+                    <input type="password" name="password" required /><br />
+                    <button type="submit">Register</button>
+                </form>
+            </div>
+
+            <div class="site-footer">
+                <p>
+                    <a href="{{ url_for('index') }}">Index</a> {% if logged_in
+                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                    %} {% if is_owner %} ---
+                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
+                    endif %} {% if is_admin %} ---
+                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    </body>
+</html>
