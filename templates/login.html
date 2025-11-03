@@ -5,11 +5,11 @@
         <title>Login</title>
         <link
             rel="stylesheet"
-            href="{{ url_for('static', filename='login.css') }}"
+            href="{{ url_for('static', filename='style.css') }}"
         />
     </head>
     <body>
-        <div class="login-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -85,7 +85,7 @@
                     </svg>
                 </button>
                 {% if logged_in %}
-                <p style="width: 100%; margin-top: 25px; margin-left: 170px">
+                <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
                         >{{ session['username'] }}</a
@@ -98,7 +98,7 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="container">
+            <div class="container-1">
                 <h1>Login</h1>
                 <form method="POST">
                     <label>Username</label><br />

@@ -9,6 +9,7 @@
         />
     </head>
     <body>
+        <div class="container">
         <div class="site-header">
             <button
                 type="button"
@@ -80,82 +81,136 @@
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                max-width: 800px;
+                max-width: 1200px;
                 margin: 0 auto 30px auto;
+                margin-top: -10px;
             "
         >
-            <h1 style="margin: 0">kawfee.net</h1>
-            <!-- Search form with extra top margin for spacing -->
-            <form
-                method="get"
-                action="{{ url_for('index') }}"
-                style="
-                    display: flex;
-                    gap: 10px;
-                    align-items: center;
-                    margin-top: 30px;
-                "
-            >
+            <h1 style="margin:0">kawfee.net</h1>
+            <form method="get" action="/" style="display:flex; height: 90px">
+                <!-- Search input for title, author, tags, fandoms -->
+                <div style="width:500px; margin-right: -170px"->
+                <div>
                 <input
                     type="text"
                     name="search"
-                    placeholder="Search by title or author"
-                    value="{{ search_query }}"
-                    style="
-                        padding: 8px 12px;
-                        border-radius: 4px;
-                        font-family:
-                            &quot;Helvetica Neue&quot;, Helvetica, Arial,
-                            sans-serif;
-                        font-size: 14px;
-                    "
-                />
-                <button
-                    type="submit"
-                    style="
-                        padding: 8px 16px;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-family:
-                            &quot;Helvetica Neue&quot;, Helvetica, Arial,
-                            sans-serif;
-                        font-size: 14px;
-                        margin-bottom: 8px;
-                    "
+                    placeholder="Search by title, author, tags, fandoms"
+                    value="{{ request.args.get('search', '') }}"
                 >
-                    Search
-                </button>
+                </div>
+                <!-- Specific Fandom search input -->
+                <div>
+                <input
+                    type="text"
+                    name="fandom"
+                    placeholder="Search by fandom"
+                    value="{{ request.args.get('fandom', '') }}"
+                >
+        </div>
+                </div>
+                <!-- Optional: other filters like tag or age_rating can go here -->
+                <div style="margin-top: 35px">
+                <button type="submit">Search</button>
+                </div>
+            </form>
                 {% if current_tag %}
                 <input type="hidden" name="tag" value="{{ current_tag }}" />
                 {% endif %}
             </form>
         </div>
-        <!-- Fanfic list -->
-        <div class="fanfic-list">
-            {% for fic in fanfics %}
-            <div class="fic-card">
-                <a id="fic-title" href="{{ url_for('view_fic', fid=fic.id) }}"
-                    >{{ fic.title }}</a
-                >
-                <p>
-                    by
-                    <a href="{{ url_for('user_profile', username=fic.author) }}"
-                        >{{ fic.author }}</a
-                    >
-                </p>
-            </div>
-            {% endfor %}
-        </div>
-        {% if logged_in %}
-        <div class="submit-link">
-            <a href="{{ url_for('logout') }}">Logout</a> ---
-            <a href="{{ url_for('submit') }}">Submit a new fanfic</a>
-            {% if is_admin %} ---
-            <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-            {% endif %}
-        </div>
-        {% endif %}
+        <div class="index-container">
+            <div class="left-column">
+                <div class="introduction">
+                    <h1>{{ site_info.title }}</h1>
+                    <p>{{ site_info.content[:230] | replace('\n', '<br>') | safe  }}... </p>
+                    <a href="{{ url_for('about')}}">Read More</a>
+                </div>
+        <div class="tags-filter">
+            <p><h3 style="margin:0"->Top 5 Tags</h3></p>
+            <ul>
+              {% for tag in top_tags %}
+                <li><a href="{{ url_for('filter_by_single_tag', tag=tag|urlencode) }}">{{ tag }}</a></li>
+              {% endfor %}
+            </ul>
+              </div>
+              <div class="update-container">
+                  {% if latest_post %}
+                      <div style="padding: 10px; overflow-y:auto;">
+                          <h2 style="margin:0">Site Updates</h2>
+                          <h3>{{ latest_post.title }}</h3>
+                          <p><strong>By:</strong> {{ latest_post.author }}</p>
+                          <p><strong>Published on:</strong> {{ latest_post.formatted_timestamp }}</p>
+                          <p>{{  latest_post.content[:215] }}...</p>
+                          <a href="{{ url_for('view_blog_post', post_id=latest_post.id) }}">Read More</a>
+                      </div>
+                  {% else %}
+                      <p>No blog posts available.</p>
+                  {% endif %}
+              </div>
 
+              {% if logged_in %}
+              <div class="site-footer">
+                  {% if show_back_link %}
+                    <a href="{{ url_for('index') }}">Index</a> ---
+                  {% endif %}
+                  <a href="{{ url_for('logout') }}">Logout</a> ---
+                  <a href="{{ url_for('submit') }}">Submit a new fanfic</a>
+                  {% if is_admin %} ---
+                  <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                  {% endif %}
+              </div>
+              {% endif %}
+            </div>
+              <div class="fanfic-container">
+                  <div style="margin-bottom:7px;text-align:right">
+                    <span>Page {{ current_page }} of {{ total_pages }}</span>
+                  </div>
+                  <div class="fanfic-list">
+                    {% if fanfics %}
+                      {% for fic in fanfics %}
+                        <div class="fic-card">
+                            <div style="display:flex;justify-content:space-between">
+                          <a id="fic-title" href="{{ url_for('view_fic', fid=fic.id) }}">{{ fic.title }}</a>
+                              <div class="age-rating">
+                              <p>{{ fic["age_rating"] if fic["age_rating"] else "N/A" }}</p>
+                              </div>
+                            </div>
+                            <p style="margin-top: -5px">
+                              by
+                              <a href="{{ url_for('user_profile', username=fic.author) }}">{{ fic.author }}</a>
+                            </p>
+                          <p>
+                            {% for tag in fic.tags %}
+                              <span>{{ tag }}</span>
+                            {% endfor %}
+                          </p>
+                           <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
+
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      <p>No fanfics found.</p>
+                    {% endif %}
+                  </div>
+                  <div class="pagination">
+                    <div>
+                      {% if current_page > 1 %}
+                        <a href="{{ url_for('index', page=current_page-1, search=request.args.get('search'), author=request.args.get('author'), tag=request.args.get('tag')) }}">
+                          Previous
+                        </a>
+                      {% endif %}
+                    </div>
+
+                    <div>
+                      {% if current_page < total_pages %}
+                        <a href="{{ url_for('index', page=current_page+1, search=request.args.get('search'), author=request.args.get('author'), tag=request.args.get('tag')) }}">
+                          Next
+                        </a>
+                      {% endif %}
+                    </div>
+                  </div>
+</div>
+        </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
     </body>
 </html>

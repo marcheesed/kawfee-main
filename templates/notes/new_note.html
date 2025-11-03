@@ -2,19 +2,23 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <title>{{ username }}'s Profile</title>
-        <link
-            rel="stylesheet"
-            href="{{ url_for('static', filename='profile.css') }}"
-        />
-        {% if user.custom_css %}
-        <style>
-            {{ user.custom_css | safe }}
-        </style>
-        {% endif %}
+        <title>Create New Note</title>
+        <head>
+            <meta charset="UTF-8" />
+            <title>{{ username }}'s Notes</title>
+            <link
+                rel="stylesheet"
+                href="{{ url_for('static', filename='style.css') }}"
+            />
+            {% if user.custom_css %}
+            <style>
+                {{ user.custom_css | safe }}
+            </style>
+            {% endif %}
+        </head>
     </head>
     <body>
-        <div class="profile-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -103,89 +107,34 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="container">
-                <h1>
-                    {% if logged_in %} Your {% else %} {{ user.username }}'s {%
-                    endif %} Profile
-                </h1>
-                <div class="profile-box">
-                    <div class="pfp">
-                        <img
-                            src="{{ url_for('static', filename=user['pfp'] if user['pfp'] else 'images/default_pfp.png') }}"
-                            alt="{{ user['username'] }}'s profile picture"
-                        />
-                    </div>
-                    <div class="user-flex">
-                        <div class="user-bio">
-                            <p>{{ user.bio | nl2br | safe }}</p>
-                        </div>
-                        <div style="padding-top: 10px">
-                            <form
-                                method="POST"
-                                enctype="multipart/form-data"
-                                action="{{ url_for('edit_profile') }}"
-                            >
-                                <label for="pfp">Profile Picture:</label>
-                                <input
-                                    type="file"
-                                    name="pfp"
-                                    id="pfp"
-                                    accept="image/*"
-                                />
-                                <!-- other inputs -->
-                                <button type="submit">Save</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <form method="POST" enctype="multipart/form-data">
-                    <label for="username">Username:</label>
-                    <input
-                        type="text"
-                        name="username"
-                        value="{{ user.username }}"
-                        required
-                    />
-
-                    <label for="custom_css">Custom CSS:</label>
+            <div class="container-2">
+                <h2>Create a New Note</h2>
+                <form method="post">
+                    <label for="json-input" style="display: none"
+                        >Note Content</label
+                    >
                     <textarea
-                        style="white-space: pre-wrap"
-                        name="custom_css"
-                        id="custom_css"
-                        rows="6"
-                        cols="30"
-                    >
-{{ user.custom_css or '' }}</textarea
-                    >
-
-                    <label for="bio">Bio:</label>
-                    <textarea
-                        name="bio"
-                        style="white-space: pre-wrap; height: 100px"
-                        wrap="soft"
-                    >
-{{ user.bio }}</textarea
-                    >
-                    {% if is_admin %}
-                    <a
-                        href="{{ url_for('set_display_name', username=user.username) }}"
-                        >Set Display Name</a
-                    >
-                    {% endif %} <br /><br />
-
-                    <!-- Submit button inside the form -->
-                    <button type="submit">Save Changes</button>
+                        id="json-input"
+                        name="content"
+                        placeholder="Enter your notes here..."
+                        rows="10"
+                    ></textarea>
+                    <br />
+                    <button type="submit">Save</button>
                 </form>
-            </div>
-            <div class="site-footer">
-                <p>
-                    <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                    %} {% if is_admin %} ---
-                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% endif %}
-                </p>
+                <br />
+
+                <div class="site-footer">
+                    <p>
+                        <a href="{{ url_for('index') }}">Index</a> {% if
+                        is_admin %} ---
+                        <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                        {% endif %} {% if logged_in %} ---
+                        <a href="{{ url_for('logout') }}">Logout</a> --- {%
+                        endif %}
+                        <a href="{{ url_for('notes') }}">Back to all notes</a>
+                    </p>
+                </div>
             </div>
         </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>

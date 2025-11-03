@@ -2,14 +2,14 @@
 <html>
     <head>
         <meta charset="UTF-8" />
-        <title>Edit {{ fic.title }}</title>
+        <title>Edit Fic: {{ fic.title }}</title>
         <link
             rel="stylesheet"
-            href="{{ url_for('static', filename='edit.css') }}"
+            href="{{ url_for('static', filename='style.css') }}"
         />
     </head>
     <body>
-        <div class="edit-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -85,7 +85,7 @@
                     </svg>
                 </button>
                 {% if logged_in %}
-                <p style="margin-top: 30px; width: 550px">
+                <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
                         >{{ session['username'] }}</a
@@ -100,7 +100,7 @@
                 {% endif %}
             </div>
 
-            <div class="container">
+            <div class="container-1">
                 <h1>Edit {{ fic.title }}</h1>
 
                 <!-- Main form for editing fanfic -->
@@ -141,40 +141,29 @@
                     >
 
                     <!-- Tags section -->
-                    <label>Tags</label><br />
                     <div class="submit-tags">
-                        <label>Existing Tags</label><br />
-                        <select name="tags" multiple>
-                            {% for tag in tags %}
-                            <option
-                                value="{{ tag }}"
-                                {%
-                                if
-                                tag
-                                in
-                                fic.tags
-                                %}selected{%
-                                endif
-                                %}
-                            >
-                                {{ tag }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <br /><br />
-
-                        <label>Or add a new tag</label><br />
-                        <input
-                            id="new-tag"
-                            type="text"
-                            name="new_tag"
-                            placeholder="Enter custom tag"
-                        />
-                    </div>
-
+                        <div class="tags-input-container" style="margin-top: 20px;">
+                            <label for="tags-input">Tags</label><br />
+                            <input
+                                type="text"
+                                id="tags-input"
+                                placeholder="Type tags and press Enter or comma"
+                                autocomplete="off"
+                            />
+                            <div id="tags-container" style="margin-top: 10px;"></div>
+                            <input type="hidden" name="tags" id="tags-hidden" />
+                        </div>
+                        <br />
+                    <label for="age_rating">Age Rating:</label>
+                    <select name="age_rating" id="age_rating" required>
+                        <option value="">Select age rating</option>
+                        <option value="18+">18+</option>
+                        <option value="16+">16+</option>
+                        <option value="13+">13+</option>
+                    </select>
+<br><br>
                     <!-- Submit button for main form -->
-                    <button type="submit">Save Changes</button>
-                </form>
+                    <button type="submit">Save Changes</button>                </form>
 
                 <!-- Separate form for delete with confirmation -->
                 <form
@@ -192,17 +181,18 @@
                 </form>
             </div>
 
-            <div class="site-footer">
-                <p>
-                    <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                    %} {% if is_owner %} ---
-                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
-                    endif %} {% if is_admin %} ---
-                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% endif %}
-                </p>
-            </div>
+
+        </div>
+        <div class="site-footer">
+            <p>
+                <a href="{{ url_for('index') }}">Index</a> {% if logged_in
+                %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                %} {% if is_owner %} ---
+                <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
+                endif %} {% if is_admin %} ---
+                <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                {% endif %}
+            </p>
         </div>
 
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
@@ -248,6 +238,71 @@
                         }
                     }
                 });
+        </script>
+        <script>
+            // Initialize tags array with current tags from server
+            const initialTags = {{ fic.tags | tojson }};
+            let tags = [...initialTags];
+
+            const tagsInput = document.getElementById("tags-input");
+            const tagsContainer = document.getElementById("tags-container");
+            const hiddenInput = document.getElementById("tags-hidden");
+            const form = document.getElementById("fanfic-form");
+
+            function updateHiddenInput() {
+                hiddenInput.value = JSON.stringify(tags);
+            }
+
+            function addTag(tag) {
+                tag = tag.trim();
+                if (tag && !tags.includes(tag)) {
+                    tags.push(tag);
+                    renderTags();
+                    updateHiddenInput();
+                }
+            }
+
+            function removeTag(tag) {
+                tags = tags.filter((t) => t !== tag);
+                renderTags();
+                updateHiddenInput();
+            }
+
+            function renderTags() {
+                tagsContainer.innerHTML = "";
+                tags.forEach((tag) => {
+                    const span = document.createElement("span");
+                    span.textContent = tag;
+                    span.style.border = "1px solid #ccc";
+                    span.style.borderRadius = "4px";
+                    span.style.padding = "4px 8px";
+                    span.style.margin = "4px";
+                    span.style.display = "inline-block";
+                    span.style.cursor = "pointer";
+                    span.title = "Click to remove";
+                    span.onclick = () => removeTag(tag);
+                    tagsContainer.appendChild(span);
+                });
+            }
+
+            // Add tags on Enter or comma
+            document
+                .getElementById("tags-input")
+                .addEventListener("keydown", (e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addTag(tagsInput.value);
+                        tagsInput.value = "";
+                    }
+                });
+
+            // On form submit, set the hidden input
+            form.addEventListener("submit", () => {
+                updateHiddenInput();
+            });
+
+            // Initialize display
+            renderTags();
         </script>
     </body>
 </html>

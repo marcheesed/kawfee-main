@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>{{ fic.title }}</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
+    </head>
+    <body>
+        <div class="full-container-2">
+            <div class="site-header">
+                <button
+                    type="button"
+                    id="theme-toggle"
+                    aria-label="Toggle dark mode"
+                    style="
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                    "
+                >
+                    <!-- Sun icon (light mode) -->
+                    <svg
+                        id="icon-sun"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style="display: inline"
+                    >
+                        <circle
+                            cx="12"
+                            cy="12"
+                            r="5"
+                            fill="currentColor"
+                        ></circle>
+                        <g stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line
+                                x1="4.22"
+                                y1="4.22"
+                                x2="5.64"
+                                y2="5.64"
+                            ></line>
+                            <line
+                                x1="18.36"
+                                y1="18.36"
+                                x2="19.78"
+                                y2="19.78"
+                            ></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line
+                                x1="4.22"
+                                y1="19.78"
+                                x2="5.64"
+                                y2="18.36"
+                            ></line>
+                            <line
+                                x1="18.36"
+                                y1="5.64"
+                                x2="19.78"
+                                y2="4.22"
+                            ></line>
+                        </g>
+                    </svg>
+                    <!-- Moon icon (dark mode) -->
+                    <svg
+                        id="icon-moon"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style="display: none"
+                    >
+                        <path
+                            d="M21 12.79A9 9 0 0112.21 3a7 7 0 100 14 9 9 0 008.79-4.21z"
+                            fill="currentColor"
+                        ></path>
+                    </svg>
+                </button>
+                {% if logged_in %}
+                <p>
+                    Logged in as
+                    <a href="{{ url_for('profile') }}"
+                        >{{ session['username'] }}</a
+                    >
+                </p>
+                {% else %}
+                <p>
+                    <a href="{{ url_for('login') }}">Login</a> |
+                    <a href="{{ url_for('register') }}">Register</a>
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="container-1">
+                <h1>{{ fic.title }}</h1>
+                <p>by {{ fic.owner }}</p>
+                <!-- other details -->
+                <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
+                <p>Age Rating: {{ fic["age_rating"] }}</p>
+                <div id="chapterDisplay">
+                    <h2>{{ fic.chapters[0].title }}</h2>
+                    <div class="chapter-content">
+                        <pre class="fic-text" style="white-space: pre-wrap">
+{{ fic.chapters[0].content | safe }} </pre
+                        >
+                    </div>
+                </div>
+                <h3>Tags</h3>
+                <p>
+                    {% for tag in fic.tags %}
+                    <span>{{ tag }}</span>
+                    {% endfor %}
+                </p>
+                <h3>Kudos ({{ fic.kudos|length }})</h3>
+                {% set total_users = fic.kudos|length %} {% if total_users > 2
+                %} {% set displayed_users = fic.kudos[:2] %} {{
+                displayed_users|join(', ') }} and {{ total_users - 2 }} others
+                have given kudos! {% elif total_users == 2 %} {{ fic.kudos[0] }}
+                and {{ fic.kudos[1] }} have given kudos! {% elif total_users ==
+                1 %} {{ fic.kudos[0] }} has given kudos! {% else %}
+                <p>No kudos yet.</p>
+                {% endif %}
+                <form
+                    id="name"
+                    method="POST"
+                    action="{{ url_for('add_kudo', fid=fic.id) }}"
+                    style="margin-top: -10px"
+                >
+                    <br />
+                    <button type="submit">Give Kudos</button>
+                </form>
+                <h3>Comments</h3>
+                <div>
+                    {% for comment in fic.comments %} {% set index = loop.index0
+                    %}
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            padding: 5px;
+                            border-bottom: 1px solid #ccc;
+                        "
+                    >
+                        <div style="display: flex; align-items: center">
+                            <!-- User profile picture -->
+                            <img
+                                src="{{ url_for('static', filename=comment['pfp']) if comment['pfp'] else url_for('static', filename='images/default_pfp.png') }}"
+                                alt="Profile Picture"
+                                width="80"
+                                height="80"
+                                style="border-radius: 8px; margin-right: 10px"
+                            />
+                            <div>
+                                <strong>{{ comment.name }}</strong>: {{
+                                comment.content | safe }}<br />
+                                <small>{{ comment.timestamp }}</small>
+                            </div>
+                        </div>
+                        <div>
+                            {% if is_admin or session.username == comment.name
+                            %}
+                            <!-- Delete button -->
+                            <form
+                                method="POST"
+                                action="{{ url_for('delete_comment', fid=fic.id, comment_index=index) }}"
+                                style="display: inline"
+                            >
+                                <button type="submit">Delete</button>
+                            </form>
+                            {% endif %}
+                            <button
+                                type="button"
+                                onclick="fillReply('{{ comment.name }}')"
+                            >
+                                Reply
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <h4>Add a Comment</h4>
+                <form
+                    method="POST"
+                    action="{{ url_for('add_comment', fid=fic.id) }}"
+                >
+                    <br />
+                    <textarea
+                        name="content"
+                        rows="3"
+                        placeholder="Your comment"
+                        required
+                    ></textarea>
+                    <br />
+                    <button type="submit">Post Comment</button>
+                </form>
+            </div>
+            <div class="footer">
+                <p>
+                    <a href="{{ url_for('index') }}">Index</a>
+                    {% if session['username'] == fic.owner %} ---
+                    <a href="{{ url_for('edit_fic', fid=fic.id) }}"
+                        >Edit this Fanfic</a
+                    >
+                    {% endif %} {% if is_admin %} ---
+                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                    {% endif %} {% if logged_in %}--
+                    <a href="{{ url_for('logout') }}">Logout</a> {% endif %}
+                </p>
+            </div>
+        </div>
+        <script src="{{ url_for('static', filename='theme.js') }}"></script>
+        <script>
+            function fillReply(username) {
+                const textarea = document.querySelector(
+                    'textarea[name="content"]',
+                );
+                textarea.value = "@" + username + " ";
+                textarea.focus();
+            }
+        </script>
+    </body>
+</html>

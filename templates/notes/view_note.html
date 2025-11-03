@@ -2,19 +2,23 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <title>{{ username }}'s Notes</title>
-        <link
-            rel="stylesheet"
-            href="{{ url_for('static', filename='notes.css') }}"
-        />
-        {% if user.custom_css %}
-        <style>
-            {{ user.custom_css | safe }}
-        </style>
-        {% endif %}
+        <title>View Note {{ note_id }}</title>
+        <head>
+            <meta charset="UTF-8" />
+            <title>{{ username }}'s Notes</title>
+            <link
+                rel="stylesheet"
+                href="{{ url_for('static', filename='style.css') }}"
+            />
+            {% if user.custom_css %}
+            <style>
+                {{ user.custom_css | safe }}
+            </style>
+            {% endif %}
+        </head>
     </head>
     <body>
-        <div class="notes-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -104,34 +108,29 @@
                 {% endif %}
             </div>
             <div class="container">
-                <h1>Your Notes</h1>
-<br>
-
-                <div class="notes-list">
-                        {% for note_id, note in notes.items() %}
-                        <div class="notes-card">
-                            <a href="{{ url_for('view_note', note_id=note_id) }}">
-                                            Note {{ note_id }}
-                                        </a> <br>
-                                        {{ note[:50] }}{% if note|length > 50 %}...
-                                       {% endif %}
-                    </div>
-                        {% else %}
-                        You don't have any notes yet!
-                        {% endfor %}
+                <div class="notes-card">
+                    <h3>Note {{ note_id }}</h3>
+                    <br />
+                    <pre class="notes-text" style="white-space: pre-wrap">
+{{ note_content | safe }}</pre
+                    >
                 </div>
 
-        </div>
-        <div class="site-footer">
-            <p>
-                <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                %} {% if is_owner %} ---
-                <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
-                endif %} {% if is_admin %} ---
-                <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                {% endif %} --- <a href="{{ url_for('new_note') }}">Create New Note</a>
-            </p>
+                <div class="site-footer" style="text-align: left">
+                    <p>
+                        <a href="{{ url_for('index') }}">Index</a> ---
+                        <a href="{{ url_for('logout') }}">Logout</a> ---
+                        <a href="{{ url_for('notes') }}">Back to all notes</a>
+                        ---
+                        <a href="{{ url_for('edit_note', note_id=note_id) }}"
+                            >Edit</a
+                        >
+                        {% if is_admin %} ---
+                        <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
         </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
     </body>

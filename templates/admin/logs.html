@@ -1,24 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html>
     <head>
         <meta charset="UTF-8" />
-        <title>Create New Note</title>
-        <head>
-            <meta charset="UTF-8" />
-            <title>{{ username }}'s Notes</title>
-            <link
-                rel="stylesheet"
-                href="{{ url_for('static', filename='notes.css') }}"
-            />
-            {% if user.custom_css %}
-            <style>
-                {{ user.custom_css | safe }}
-            </style>
-            {% endif %}
-        </head>
+        <title>Login</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
     </head>
     <body>
-        <div class="notes-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -97,7 +88,8 @@
                 <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
-                        >{{ session['username'] }}</a
+                        >{{ session.get('username', 'No username in session')
+                        }}</a
                     >
                 </p>
                 {% else %}
@@ -107,22 +99,31 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="container">
-                <h2>Create a New Note</h2>
-                <form method="post">
-                    <label for="json-input" style="display: none"
-                        >Note Content</label
-                    >
-                    <textarea
-                        id="json-input"
-                        name="content"
-                        placeholder="Enter your notes here..."
-                    ></textarea>
-                    <br />
-                    <button type="submit">Save</button>
-                </form>
+            <div class="container-1">
+                <h1>All Users</h1>
                 <br />
-                <a href="{{ url_for('notes') }}">Back to all notes</a>
+                <ul>
+                    {% for username in users %}
+                    <li>
+                        {{ username }} -
+                        <a href="{{ url_for('user_logs', username=username) }}"
+                            >View Logs</a
+                        >
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="site-footer">
+                <p>
+                    <a href="{{ url_for('index') }}">Index</a> {% if logged_in
+                    %} --- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                    %} ---
+                    <a href="{{ url_for('all_logs') }}">View All Logs</a> {% if
+                    is_admin %} ---
+                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                    {% endif %}
+                </p>
             </div>
         </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>

@@ -1,15 +1,20 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <title>{{ fic.title }}</title>
+        <title>{{ username }}'s Notes</title>
         <link
             rel="stylesheet"
-            href="{{ url_for('static', filename='view_fic.css') }}"
+            href="{{ url_for('static', filename='style.css') }}"
         />
+        {% if user.custom_css %}
+        <style>
+            {{ user.custom_css | safe }}
+        </style>
+        {% endif %}
     </head>
     <body>
-        <div class="fic-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -90,85 +95,55 @@
                     <a href="{{ url_for('profile') }}"
                         >{{ session['username'] }}</a
                     >
-                    |
-                    <a href="{{ url_for('logout') }}">Logout</a>
                 </p>
                 {% else %}
                 <p>
-                    <a href="{{ url_for('login') }}">Login</a> |
+                    <a href="{{ url_for('login') }}">Login</a> ---
                     <a href="{{ url_for('register') }}">Register</a>
                 </p>
                 {% endif %}
             </div>
-            <div class="container">
-                <h1>{{ fic.title }}</h1>
-                <p>by {{ fic.owner }}</p>
-                <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
-                <h2>{{ fic.chapters[0].title }}</h2>
-                <pre style="white-space: pre-wrap">
-{{ fic.chapters[0].content }}</pre
-                >
-
-                <h3>Tags</h3>
-                <p>
-                    {% for tag in fic.tags %}
-                    <span>{{ tag }}</span>
-                    {% endfor %}
-                </p>
-
-                <h3>Kudos ({{ fic.kudos|length }})</h3>
-                <ul>
-                    {% for user in fic.kudos %}
-                    <li>{{ user }}</li>
-                    {% endfor %}
-                </ul>
-                <form
-                    id="name"
-                    method="POST"
-                    action="{{ url_for('add_kudo', fid=fic.id) }}"
-                >
-                    <br />
-                    <button type="submit">Give Kudos</button>
-                </form>
-
-                <h3>Comments</h3>
-                <div>
-                    {% for comment in fic.comments %}
-                    <p>
-                        <strong>{{ comment.name }}:</strong> {{ comment.content
-                        }}
-                    </p>
-                    {% endfor %}
+            <div class="container-2">
+                <h1>Your Notes</h1>
+<br><span style="height:32px; margin-bottom:5px">Page {{ current_page }} of {{ total_pages }}</span>
+                <div class="notes-list">
+                    {% if notes %}
+                        {% for note in notes %}
+                            <div class="notes-card">
+                                <a href="{{ url_for('view_note', note_id=note.id) }}">
+                                    Note {{ note.id }}
+                                </a>
+                                <br>
+                                {{ note.content[:50] }}{% if note.content|length > 50 %}...{% endif %}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p>You don't have any notes yet!</p>
+                    {% endif %}
                 </div>
-                <h4>Add a Comment</h4>
-                <form
-                    method="POST"
-                    action="{{ url_for('add_comment', fid=fic.id) }}"
-                >
-                    <br />
-                    <textarea
-                        name="content"
-                        rows="3"
-                        placeholder="Your comment"
-                        required
-                    ></textarea>
-                    <br />
-                    <button type="submit">Post Comment</button>
-                </form>
-            </div>
-            <div class="footer">
-                <p>
-                    <a href="{{ url_for('index') }}">Index</a>
-                    {% if session['username'] == fic.owner %} ---
-                    <a href="{{ url_for('edit_fic', fid=fic.id) }}"
-                        >Edit this Fanfic</a
+                <div class="pagination">
+                    {% if current_page > 1 %}
+                    <a href="{{ url_for('blog', page=current_page - 1) }}"
+                        >Previous</a
                     >
-                    {% endif %} {% if is_admin %} ---
-                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% endif %} {% if logged_in %}--
-                    <a href="{{ url_for('logout') }}">Logout</a> {% endif %}
-                </p>
-            </div>
+                    {% endif %} {% if current_page < total_pages %}
+                    <a href="{{ url_for('blog', page=current_page + 1) }}"
+                        >Next</a
+                    >
+                    {% endif %}
+                </div>
+
+        </div>
+        <div class="site-footer">
+            <p>
+                <a href="{{ url_for('index') }}">Index</a> {% if logged_in
+                %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                %} {% if is_owner %} ---
+                <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
+                endif %} {% if is_admin %} ---
+                <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                {% endif %} --- <a href="{{ url_for('new_note') }}">Create New Note</a>
+            </p>
         </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
     </body>

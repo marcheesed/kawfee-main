@@ -1,20 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html>
     <head>
         <meta charset="UTF-8" />
-        <title>{{ username }}'s Profile</title>
+        <title>Admin Panel</title>
         <link
             rel="stylesheet"
-            href="{{ url_for('static', filename='profile.css') }}"
+            href="{{ url_for('static', filename='style.css') }}"
         />
-        {% if user.custom_css %}
-        <style>
-            {{ user.custom_css | safe }}
-        </style>
-        {% endif %}
     </head>
     <body>
-        <div class="profile-container">
+        <div class="full-container">
             <div class="site-header">
                 <button
                     type="button"
@@ -93,8 +88,9 @@
                 <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
-                        >{{ session['username'] }}</a
+                        >{{ session.get('username', 'No username in session') }}</a
                     >
+
                 </p>
                 {% else %}
                 <p>
@@ -103,88 +99,80 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="container">
-                <h1>
-                    {% if logged_in %} Your {% else %} {{ user.username }}'s {%
-                    endif %} Profile
-                </h1>
-                <div class="profile-box">
-                    <div class="pfp">
-                        <img
-                            src="{{ url_for('static', filename=user['pfp'] if user['pfp'] else 'images/default_pfp.png') }}"
-                            alt="{{ user['username'] }}'s profile picture"
-                        />
-                    </div>
-                    <div class="user-flex">
-                        <div class="user-bio">
-                            <p>{{ user.bio | nl2br | safe }}</p>
-                        </div>
-                        <div style="padding-top: 10px">
+            <div class="container-1">
+                <h1>Admin Panel</h1>
+
+                <h2>Users</h2>
+                <ul>
+                    {% for username, info in users.items() %}
+                    <div style="display:flex; align-items:center; gap:10px; padding-bottom:15px;">
+                        <form
+                            action="{{ url_for('delete_user', username=username) }}"
+                            method="post"
+                            onsubmit="return confirm('Are you sure you want to delete this user?');"
+                        >
+                            <button type="submit">Delete User</button>
+                        </form>
+
+                        <!-- Ban/Unban toggle button -->
+                        <form
+                            action="{{ url_for('ban_user', username=username) }}"
+                            method="post"
+                            style="display:inline-block; margin-left:10px;"
+                            onsubmit="return confirm('Are you sure you want to {% if info.banned %}unban{% else %}ban{% endif %} {{ username }}?');"
+                        >
+                            {% if info.banned %}
+                                <button type="submit">Unban User</button>
+                            {% else %}
+                                <button type="submit">Ban User</button>
+                            {% endif %}
+                        </form>
+
+                        <li style="margin-left: 20px;">
+                            {{ username }} - {% if info.is_admin %}Admin{% else %}User{% endif %}
+                            {% if info.banned %}
+                                <span style="color:red;">[BANNED]</span>
+                            {% endif %}
+                            | IP: {{ user_ips[username] }}
+                            <!-- Ban IP form -->
                             <form
-                                method="POST"
-                                enctype="multipart/form-data"
-                                action="{{ url_for('edit_profile') }}"
+                                action="{{ url_for('ban_ip') }}"
+                                method="post"
+                                style="display:inline-block; margin-left:10px;"
+                                onsubmit="return confirm('Ban IP {{ user_ips[username] }}?');"
                             >
-                                <label for="pfp">Profile Picture:</label>
-                                <input
-                                    type="file"
-                                    name="pfp"
-                                    id="pfp"
-                                    accept="image/*"
-                                />
-                                <!-- other inputs -->
-                                <button type="submit">Save</button>
+                                <input type="hidden" name="ip" value="{{ user_ips[username] }}">
+                                <button type="submit">Ban IP</button>
                             </form>
-                        </div>
+                        </li>
                     </div>
-                </div>
-
-                <form method="POST" enctype="multipart/form-data">
-                    <label for="username">Username:</label>
-                    <input
-                        type="text"
-                        name="username"
-                        value="{{ user.username }}"
-                        required
-                    />
-
-                    <label for="custom_css">Custom CSS:</label>
-                    <textarea
-                        style="white-space: pre-wrap"
-                        name="custom_css"
-                        id="custom_css"
-                        rows="6"
-                        cols="30"
-                    >
-{{ user.custom_css or '' }}</textarea
-                    >
-
-                    <label for="bio">Bio:</label>
-                    <textarea
-                        name="bio"
-                        style="white-space: pre-wrap; height: 100px"
-                        wrap="soft"
-                    >
-{{ user.bio }}</textarea
-                    >
-                    {% if is_admin %}
-                    <a
-                        href="{{ url_for('set_display_name', username=user.username) }}"
-                        >Set Display Name</a
-                    >
-                    {% endif %} <br /><br />
-
-                    <!-- Submit button inside the form -->
-                    <button type="submit">Save Changes</button>
-                </form>
+                    {% endfor %}
+                </ul>
+                <h2>Fanfics</h2>
+                <ul>
+                    {% for fic in fanfics %}
+                    <div style="display:flex; align-items:center; gap:10px; padding-bottom:15px;">
+                        <form
+                            action="{{ url_for('delete_fic_admin', fic_id=fic.id) }}"
+                            method="post"
+                            onsubmit="return confirm('Are you sure you want to delete this fanfic?');"
+                        >
+                            <button type="submit">Delete Fanfic</button>
+                        </form>
+                    <li style="margin-left: 20px;">
+                        {{ fic.title }} by {{ fic.author }}
+                    </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <a href="{{ url_for('edit_site_info') }}">Edit Site Info</a> ---
+                <a href="{{ url_for('new_blog_post') }}">New Site Update</a> ---
+                <a href="{{ url_for('show_logs') }}">User IP Logs</a>
             </div>
             <div class="site-footer">
                 <p>
                     <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                    %} {% if is_admin %} ---
-                    <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% endif %}
+                    %} --- <a href="{{ url_for('logout') }}">Logout</a> {% endif %}
                 </p>
             </div>
         </div>
