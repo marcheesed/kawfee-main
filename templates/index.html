@@ -3,6 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <title>kawfee.net</title>
+        <link rel="icon" href="{{ url_for('static', filename='favicon.webp') }}" type="image/x-icon" />
         <link
             rel="stylesheet"
             href="{{ url_for('static', filename='index-style.css') }}"
@@ -64,7 +65,7 @@
                     ></path>
                 </svg>
             </button>
-            {% if logged_in %}
+            {% if is_logged_in %}
             <p>
                 Logged in as
                 <a href="{{ url_for('profile') }}">{{ session['username'] }}</a>
@@ -88,45 +89,36 @@
         >
             <h1 style="margin:0">kawfee.net</h1>
             <form method="get" action="/" style="display:flex; height: 90px">
-                <!-- Search input for title, author, tags, fandoms -->
-                <div style="width:500px; margin-right: -170px"->
+              <!-- Search input for title, author, tags, fandoms -->
+              <div style="width:500px; margin-right: -170px; margin-top: 33px;">
                 <div>
-                <input
+                  <input
                     type="text"
                     name="search"
                     placeholder="Search by title, author, tags, fandoms"
                     value="{{ request.args.get('search', '') }}"
-                >
+                  >
                 </div>
                 <!-- Specific Fandom search input -->
-                <div>
-                <input
-                    type="text"
-                    name="fandom"
-                    placeholder="Search by fandom"
-                    value="{{ request.args.get('fandom', '') }}"
-                >
-        </div>
-                </div>
-                <!-- Optional: other filters like tag or age_rating can go here -->
-                <div style="margin-top: 35px">
+              </div>
+              <!-- Submit button -->
+              <div style="margin-top: 35px">
                 <button type="submit">Search</button>
-                </div>
+              </div>
             </form>
                 {% if current_tag %}
                 <input type="hidden" name="tag" value="{{ current_tag }}" />
                 {% endif %}
-            </form>
         </div>
         <div class="index-container">
             <div class="left-column">
                 <div class="introduction">
                     <h1>{{ site_info.title }}</h1>
-                    <p>{{ site_info.content[:230] | replace('\n', '<br>') | safe  }}... </p>
+                    <p>{{ site_info.get('content', '')[:230] | replace('\n', '<br>') | safe }}... </p>
                     <a href="{{ url_for('about')}}">Read More</a>
                 </div>
         <div class="tags-filter">
-            <p><h3 style="margin:0"->Top 5 Tags</h3></p>
+            <p><h3 style="margin:0">Top 5 Tags</h3></p>
             <ul>
               {% for tag in top_tags %}
                 <li><a href="{{ url_for('filter_by_single_tag', tag=tag|urlencode) }}">{{ tag }}</a></li>
@@ -148,7 +140,7 @@
                   {% endif %}
               </div>
 
-              {% if logged_in %}
+              {% if is_logged_in %}
               <div class="site-footer">
                   {% if show_back_link %}
                     <a href="{{ url_for('index') }}">Index</a> ---

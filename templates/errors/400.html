@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Username Taken</title>
+        <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
+    </head>
+    <body>
+        <div class="full-container">
+            <div class="container-1">
+                <h1>Userame Taken</h1>
+                <p>
+                    That user already exists! Please try again with a different
+                    username.
+                </p>
+            </div>
+            <p><a href="{{ url_for('index') }}">Return to homepage</a></p>
+        </div>
+    </body>
+</html>

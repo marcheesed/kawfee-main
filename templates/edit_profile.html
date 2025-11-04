@@ -4,6 +4,11 @@
         <meta charset="UTF-8" />
         <title>{{ username }}'s Profile</title>
         <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
+        <link
             rel="stylesheet"
             href="{{ url_for('static', filename='profile.css') }}"
         />
@@ -133,7 +138,7 @@
                                     accept="image/*"
                                 />
                                 <!-- other inputs -->
-                                <button type="submit">Save</button>
+                                <button type="submit">Save PFP</button>
                             </form>
                         </div>
                     </div>
@@ -166,16 +171,33 @@
                         wrap="soft"
                     >
 {{ user.bio }}</textarea
-                    >
-                    {% if is_admin %}
-                    <a
-                        href="{{ url_for('set_display_name', username=user.username) }}"
-                        >Set Display Name</a
-                    >
-                    {% endif %} <br /><br />
+                    ><br /><br />
+                    <form method="POST" enctype="multipart/form-data">
+                        <!-- existing fields -->
+                        <input
+                            type="password"
+                            name="current_password"
+                            placeholder="Current Password"
+                            required
+                        />
+                        <input
+                            type="password"
+                            name="new_password"
+                            placeholder="New Password"
+                        />
+                        <!-- other fields -->
+                        <button
+                            type="submit"
+                            onclick="return confirm('Are you sure you want to save these changes?');"
+                        >
+                            Save Password
+                        </button>
+                    </form>
+                    <br />
+                    <br />
 
                     <!-- Submit button inside the form -->
-                    <button type="submit">Save Changes</button>
+                    <button type="submit">Save Profile Changes</button>
                 </form>
             </div>
             <div class="site-footer">
@@ -184,6 +206,11 @@
                     %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
                     %} {% if is_admin %} ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                    {% endif %} {% if is_admin %} ---
+                    <a
+                        href="{{ url_for('set_display_name', username=user.username) }}"
+                        >Set Display Name</a
+                    >
                     {% endif %}
                 </p>
             </div>

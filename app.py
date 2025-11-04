@@ -10,33 +10,116 @@ from flask import (
     abort,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import re
 from jinja2 import pass_environment
 import bleach
 from datetime import datetime, timedelta
-
+import bcrypt
 from typing import Any
 import ast
+import sqlite3
+import time
+
+
+def get_db_connection():
+    conn = sqlite3.connect("data.db", check_same_thread=False)
+    conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def execute_with_retry(cursor, query, params=(), retries=5, delay=0.1):
+    for attempt in range(retries):
+        try:
+            cursor.execute(query, params)
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(delay)
+            else:
+                raise
+    raise sqlite3.OperationalError("Database is locked, retries exhausted")
+
+
+def get_all_users():
+    conn = get_db_connection()
+    users = conn.execute("SELECT * FROM users").fetchall()
+    conn.close()
+    return [dict(row) for row in users]
+
+
+def get_user(username):
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    conn.close()
+    return dict(user) if user else None
+
+
+def save_users(user):
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE users SET password=?, is_admin=?, bio=?, pfp=?, custom_css=?, display_name=?, ip=? WHERE username=?",
+        (
+            user["password"],
+            user["is_admin"],
+            user["bio"],
+            user["pfp"],
+            user["custom_css"],
+            user["display_name"],
+            user["ip"],
+            user["username"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def create_user(user_data):
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO users (username, password, is_admin, bio, pfp, custom_css, display_name, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            user_data["username"],
+            user_data["password"],
+            user_data["is_admin"],
+            user_data["bio"],
+            user_data["pfp"],
+            user_data["custom_css"],
+            user_data["display_name"],
+            user_data["ip"],
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_user(user_data):
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE users SET password=?, is_admin=?, bio=?, pfp=?, custom_css=?, display_name=?, ip=? WHERE username=?",
+        (
+            user_data["password"],
+            user_data["is_admin"],
+            user_data["bio"],
+            user_data["pfp"],
+            user_data["custom_css"],
+            user_data["display_name"],
+            user_data["ip"],
+            user_data["username"],
+        ),
+    )
+    conn.commit()
+    conn.close()
 
 
 note: Any = None
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
-
-DATA_FILE = "data.json"
-
-data = {}
-
-
-@app.context_processor
-def inject_site_info():
-    global data
-    if data is None:
-        load_data()
-    return dict(site_info=data.get("site_info", {}))
-
 
 os.makedirs(os.path.join(app.static_folder, "pfps"), exist_ok=True)
 
@@ -111,108 +194,57 @@ def sanitize_note_content(content):
     )
 
 
-def load_data():
-    global data
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-    else:
-        data = {
-            "ip_logs": [],
-            "banned_ips": [],
-            "users": {},
-            "fanfics": [],
-            "blog_posts": [],
-            "notes": {},
-            "tags": [],
-            "site_info": {},
-        }
-
-
-def save_data():
-    global data
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-
-load_data()
-banned_ips = set()
-
-
 def log_ip(username=None, page=None):
-    global data
-    if "ip_logs" not in data:
-        data["ip_logs"] = []
-
-    if "user_logs" not in data:
-        data["user_logs"] = {}
-
     ip = request.remote_addr
-    now = datetime.now()
+    now = datetime.now().isoformat()
 
-    if username:
-        if not isinstance(username, str):
-            # ensure username is a string
-            username = str(username)
-            # i forgot what this does fuck fuck fuck
-        if username not in data["user_logs"]:
-            data["user_logs"][username] = []
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-        user_logs = data["user_logs"][username]
+    try:
+        if username:
+            # Check existing log
+            cursor.execute(
+                """
+                SELECT * FROM ip_logs
+                WHERE ip = ? AND username = ? AND timestamp > ?
+                """,
+                (ip, username, (datetime.now() - timedelta(minutes=10)).isoformat()),
+            )
+            existing_log = cursor.fetchone()
 
-        # DONT DO THIS
-        existing_log = None
-        print("user_logs:", user_logs)
-        print("user_logs type:", type(user_logs))
-        for log in user_logs:
-            print("log:", log)
-            if log["ip"] == ip and datetime.fromisoformat(
-                log["timestamp"]
-            ) > now - timedelta(minutes=10):
-                existing_log = log
-                break
-
-        if existing_log:
-            existing_log["timestamp"] = now.isoformat()
+            if existing_log:
+                # Update timestamp
+                execute_with_retry(
+                    cursor,
+                    """
+                    UPDATE ip_logs SET timestamp = ?, page = ? WHERE id = ?
+                """,
+                    (now, page, existing_log["id"]),
+                )
+            else:
+                # Insert new log
+                execute_with_retry(
+                    cursor,
+                    """
+                    INSERT INTO ip_logs (ip, timestamp, username, page)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (ip, now, username, page),
+                )
         else:
-            user_logs.append({"ip": ip, "timestamp": now.isoformat(), "page": page})
-
-    save_data()
-
-
-def load_banned_ips():
-    # load the ip data at startup
-    load_data()
-
-
-def save_banned_ip(ip):
-    if ip not in data["banned_ips"]:
-        data["banned_ips"].append(ip)
-        save_data()
-
-
-def load_users():
-    global data
-    return data
-
-
-def save_users(updated_data):
-    global data
-    data = updated_data
-
-    # what is this dude WHY DOES IT BREAK IF I DELETE IT
-    def save_data(data):
-        with open("data.json", "w") as f:
-            json.dump(data, f)
-
-    save_data(data)
-
-
-# save data
-def save_data():
-    global data
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+            # Log anonymous user
+            execute_with_retry(
+                cursor,
+                """
+                INSERT INTO ip_logs (ip, timestamp, username, page)
+                VALUES (?, ?, ?, ?)
+            """,
+                (ip, now, None, page),
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # helper to check login status :)
@@ -220,149 +252,261 @@ def logged_in():
     return "username" in session
 
 
-def get_user(username):
-    with open("data.json", "r") as f:
-        data = json.load(f)
-    return data["users"].get(username)
-
-
-def save_user(user):
-    with open("data.json", "r+") as f:
-        data = json.load(f)
-        username = user["username"]
-        # update user info
-        data["users"][username] = user
-        # rewrite the entire file because i hate my life
-        f.seek(0)
-        json.dump(data, f, indent=4)
-        f.truncate()
-
-
-# check if admin
 def is_admin():
-    if not logged_in():
+    if not is_logged_in():
         return False
     username = session["username"]
-    user_info = data["users"].get(username)
-    print("User info:", user_info)  # debug print
-    if isinstance(user_info, dict):  # check if it's a dict
-        return user_info.get("is_admin", False)
+    user = get_user(username)
+    if user:
+        return user.get("is_admin", False)
     return False
 
 
-def save_user(user):
-    data = load_users()
-    old_username = user.get("old_username", user["username"])  # handle username change
-    data["users"][old_username] = user  # update user info
+## above is refactored
 
-    # if username has changed, remove the old key!
-    if old_username != user["username"]:
-        del data["users"][old_username]
 
-    save_users(data)
+def get_banned_ips():
+    conn = get_db_connection()
+    ips = conn.execute("SELECT ip FROM banned_ips").fetchall()
+    conn.close()
+    return {row["ip"] for row in ips}
+
+
+def is_ip_banned(ip):
+    conn = get_db_connection()
+    result = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
+    conn.close()
+    return result is not None
+
+
+def save_banned_ip(ip):
+    conn = get_db_connection()
+    # Check if IP already exists to prevent duplicates
+    existing = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
+    if not existing:
+        conn.execute("INSERT INTO banned_ips (ip) VALUES (?)", (ip,))
+        conn.commit()
+    conn.close()
+
+
+def unban_ip(ip):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM banned_ips WHERE ip = ?", (ip,))
+    conn.commit()
+    conn.close()
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template("errors/403.html"), 403
+
+
+@app.errorhandler(400)
+def handle_400(error):
+    return render_template("errors/400.html"), 400
 
 
 @app.before_request
 def check_ban():
-    load_banned_ips()  # load the list each request or once during startup
+    print("Session data:", session)
     ip = request.remote_addr
-    if ip in banned_ips:
-        # generic ip banned message
-        return (
-            "Your IP has been banned. Please contact our support team to refute any unfair claims, and be sure to reread our terms of service before doing so.",
-            403,
+    if is_ip_banned(ip):
+        abort(403)
+
+
+def get_site_info():
+    conn = get_db_connection()
+    site_info = conn.execute("SELECT * FROM site_info LIMIT 1").fetchone()
+    conn.close()
+    print("Fetched site_info:", site_info)
+    if site_info:
+        site_info_dict = dict(site_info)
+        # Ensure 'content' key exists
+        if "content" not in site_info_dict:
+            site_info_dict["content"] = ""
+        return site_info_dict
+    else:
+        print("No site info found in database.")
+        return {"content": ""}
+
+
+def get_blog_posts():
+    conn = get_db_connection()
+    posts = conn.execute("SELECT * FROM blog_posts").fetchall()
+    conn.close()
+    return [dict(post) for post in posts]
+
+
+def get_fanfics():
+    conn = get_db_connection()
+    fanfics = conn.execute("SELECT * FROM fanfics").fetchall()
+
+    fanfics_with_tags = []
+
+    for f in fanfics:
+        fanfic_id = f["id"]
+        # Fetch tags for this fanfic
+        cursor = conn.execute(
+            """
+            SELECT t.name FROM tags t
+            JOIN fanfic_tags ft ON t.id = ft.tag_id
+            WHERE ft.fanfic_id = ?
+        """,
+            (fanfic_id,),
         )
+        tags = [row["name"] for row in cursor.fetchall()]
+
+        # Convert fanfic row to dict and add tags
+        fanfic_dict = dict(f)
+        fanfic_dict["tags"] = tags
+
+        fanfics_with_tags.append(fanfic_dict)
+
+    conn.close()
+    return fanfics_with_tags
 
 
-# i hate this i hat ethis
+def update_user_password(username, hashed_password):
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE users SET password = ? WHERE username = ?", (hashed_password, username)
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_logged_in():
+    return "username" in session
+
+
 @app.route("/")
 def index():
-    # use the global data
-    global data
+    # Fetch blog posts and fanfics from DB
+    blog_posts = get_blog_posts()
+    fanfics_list = get_fanfics()
 
-    # load blog posts
-    blog_posts = data.get("blog_posts", {})
+    # Generate posts list
     posts = [
         {
-            "id": post_id,
+            "id": post["id"],
             "title": post["title"],
             "content": post["content"],
             "author": post["author"],
             "timestamp": post["timestamp"],
         }
-        for post_id, post in blog_posts.items()
+        for post in blog_posts
     ]
-    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA sort function
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
-
-    # get latest post
     latest_post = posts[0] if posts else None
 
+    # Logging IP
     log_ip(username=session.get("username"), page=request.path)
-    print(
-        f"Logging IP: {request.remote_addr}, User: {session.get('username')}, Page: {request.path}"
-    )
 
-    # add date to post
+    # Format latest post timestamp
     if latest_post:
         latest_post["formatted_timestamp"] = datetime.fromisoformat(
             latest_post["timestamp"]
         ).strftime("%B %d, %Y at %I:%M %p")
 
-    # filtering fanfics
+    # Get filter queries
     search_query = request.args.get("search", "").lower()
     author_query = request.args.get("author", "").lower()
-    filter_tag = request.args.get("tag", "")
-
-    # new fandom filter parameter
+    filter_tag = request.args.get("tag", "").lower()
     fandom_search = request.args.get("fandom", "").lower()
 
-    fanfics_list = data.get("fanfics", [])
-
-    # count tags
-    tag_counts = {}
+    # Load fanfics from DB and parse JSON fields safely
+    fanfics = []
     for f in fanfics_list:
+        # handle tags
+        tags_data = f.get("tags", [])
+        if isinstance(tags_data, str):
+            if tags_data.strip():
+                try:
+                    f["tags"] = json.loads(tags_data)
+                except:
+                    f["tags"] = []
+            else:
+                f["tags"] = []
+        else:
+            f["tags"] = tags_data
+
+        # handle fandoms
+        fandoms_data = f.get("fandoms", [])
+        if isinstance(fandoms_data, str):
+            if fandoms_data.strip():
+                try:
+                    f["fandoms"] = json.loads(fandoms_data)
+                except:
+                    f["fandoms"] = []
+            else:
+                f["fandoms"] = []
+        else:
+            f["fandoms"] = fandoms_data
+
+        fanfics.append(f)
+
+    # ---- Filtering logic ----
+    filtered_fanfics = []
+
+    for f in fanfics:
+        tags = f.get("tags", [])
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except:
+                tags = []
+
+        fandoms = f.get("fandoms", [])
+        if isinstance(fandoms, str):
+            try:
+                fandoms = json.loads(fandoms)
+            except:
+                fandoms = []
+
+        combined_fields = (
+            f.get("title", "").lower()
+            + f.get("author", "").lower()
+            + " ".join(tag.lower() for tag in tags)
+        )
+
+        match_search = True
+        if search_query:
+            match_search = search_query in combined_fields
+
+        match_author = True
+        if author_query:
+            match_author = author_query in f.get("author", "").lower()
+
+        match_tag = True
+        if filter_tag:
+            match_tag = filter_tag in (tag.lower() for tag in tags)
+
+        match_fandom = True
+        if fandom_search:
+            match_fandom = any(fandom_search in fandom.lower() for fandom in fandoms)
+
+        if match_search and match_author and match_tag and match_fandom:
+            filtered_fanfics.append(f)
+
+    # Calculate top tags
+    tag_counts = {}
+    for f in fanfics:
         for tag in f.get("tags", []):
+            if isinstance(tag, str):
+                try:
+                    tag = json.loads(tag)
+                except:
+                    pass
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-    # top 5 tags
-    top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-    top_tags_list = [tag for tag, count in top_tags]
-
-    # all tags
-    all_tags = list(tag_counts.keys())
-
-    # filter fanfics based on search across title author tags fandoms
-    filtered_fanfics = fanfics_list
-    if search_query:
-        filtered_fanfics = [
-            f
-            for f in filtered_fanfics
-            if (
-                search_query in f["title"].lower()
-                or search_query in f["author"].lower()
-                or any(search_query in tag.lower() for tag in f.get("tags", []))
-                or any(
-                    search_query in fandom.lower() for fandom in f.get("fandoms", [])
-                )
-            )
+    top_tags = [
+        tag
+        for tag, count in sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[
+            :5
         ]
-    if author_query:
-        filtered_fanfics = [
-            f for f in filtered_fanfics if author_query in f["author"].lower()
-        ]
-    if filter_tag:
-        filtered_fanfics = [f for f in filtered_fanfics if filter_tag in f["tags"]]
+    ]
 
-    # additional filter for fandom search
-    if fandom_search:
-        filtered_fanfics = [
-            f
-            for f in filtered_fanfics
-            if ("fandom" in f and fandom_search in f["fandom"].lower())
-        ]
-
-    # paaaaaages im amy rose i like to play
+    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_fanfics = len(filtered_fanfics)
@@ -370,92 +514,104 @@ def index():
     start = (page - 1) * per_page
     end = start + per_page
     display_fanfics = filtered_fanfics[start:end]
-    # why are you YELLOW
+
     return render_template(
         "index.html",
         fanfics=display_fanfics,
-        all_tags=sorted(all_tags),
-        top_tags=top_tags_list,
-        current_tag=filter_tag,
-        search_query=request.args.get("search", ""),
-        author_query=request.args.get("author", ""),
-        logged_in=logged_in(),
-        tags=all_tags,
-        is_admin=is_admin(),
-        show_back_link=False,
+        site_info=get_site_info(),
+        top_tags=top_tags,
         latest_post=latest_post,
         current_page=page,
         total_pages=total_pages,
-        # pass the current filter values to the template for form pre-filling
-        current_filters={
-            "search": request.args.get("search", ""),
-            "author": request.args.get("author", ""),
-            "tag": filter_tag,
-            "age_rating": request.args.get("age_rating", ""),
-            "fandom": request.args.get("fandom", ""),  # new
-        },
+        search=request.args.get("search", ""),
+        author=request.args.get("author", ""),
+        tag=request.args.get("tag", ""),
+        fandom=request.args.get("fandom", ""),
+        is_logged_in=is_logged_in(),
+        is_admin=is_admin(),
+        # other variables if needed...
     )
 
 
 @app.route("/filter/tag/<path:tag>")
 def filter_by_single_tag(tag):
-    global data
-    # STOP RELOADING YOU FUCKER
-    fanfics_list = data.get("fanfics", [])
+    # Fetch data directly from the database
+    fanfics_list = get_fanfics()
+    blog_posts = get_blog_posts()
 
-    # laod
-    blog_posts = data.get("blog_posts", {})
+    # Fetch site info
+    site_info = get_site_info()
+    print("Fetched site_info:", site_info)
+
+    # Convert blog posts to desired format
     posts = [
         {
-            "id": post_id,
+            "id": post["id"],
             "title": post["title"],
             "content": post["content"],
             "author": post["author"],
             "timestamp": post["timestamp"],
         }
-        for post_id, post in blog_posts.items()
+        for post in blog_posts
     ]
-    # both completely naked and covered in oil
+
+    # Sort posts by timestamp descending
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
 
-    # latest post
+    # Latest post
     latest_post = posts[0] if posts else None
 
+    # Log IP
     log_ip(username=session.get("username"), page=request.path)
     print(
         f"Logging IP: {request.remote_addr}, User: {session.get('username')}, Page: {request.path}"
     )
 
-    # formatted date to latest_post
+    # Format latest post timestamp
     if latest_post:
         latest_post["formatted_timestamp"] = datetime.fromisoformat(
             latest_post["timestamp"]
         ).strftime("%B %d, %Y at %I:%M %p")
 
-    # get all tags for display
+    # Collect all tags for display
     all_tags = set()
     for f in fanfics_list:
-        all_tags.update(f.get("tags", []))
+        tags_data = f.get("tags", [])
+        if isinstance(tags_data, str):
+            if tags_data.strip():
+                try:
+                    tags_data = json.loads(tags_data)
+                except:
+                    tags_data = []
+        for t in tags_data:
+            all_tags.add(t)
+
+    # Save tags for template
     data["tags"] = list(all_tags)
 
-    # filter fanfics by the specified tag
-    filtered_fanfics = [f for f in fanfics_list if tag in f["tags"]]
+    # Filter fanfics by the specified tag
+    filtered_fanfics = [f for f in fanfics_list if tag in f.get("tags", [])]
 
-    # get current filter / search parameters if needed
+    # Get current search filters
     search_query = request.args.get("search", "")
     author_query = request.args.get("author", "")
 
-    # counttags
+    # Count tags for top tags
     tag_counts = {}
     for f in fanfics_list:
-        for tag in f.get("tags", []):
-            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        for t in f.get("tags", []):
+            if isinstance(t, str):
+                try:
+                    t = json.loads(t)
+                except:
+                    pass
+            tag_counts[t] = tag_counts.get(t, 0) + 1
 
-    # top 5 tagssss
+    # Get top 5 tags
     top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     top_tags_list = [tag for tag, count in top_tags]
 
-    # i want a beer! i want a beer! i want a beer!
+    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_fanfics = len(filtered_fanfics)
@@ -466,52 +622,75 @@ def filter_by_single_tag(tag):
 
     return render_template(
         "index.html",
-        fanfics=filtered_fanfics,
+        fanfics=display_fanfics,
         all_tags=sorted(all_tags),
         top_tags=top_tags_list,
         current_tag=tag,
-        search_query=search_query,
-        author_query=author_query,
+        search=request.args.get("search", ""),
+        author=request.args.get("author", ""),
         logged_in=logged_in(),
         current_page=page,
-        tags=data["tags"],
+        total_pages=total_pages,
+        tags=site_info,
+        site_info=site_info,
         is_admin=is_admin(),
         show_back_link=True,
         latest_post=latest_post,
-        total_pages=total_pages,
     )
+
+
+## above is actually refactored
+
+ALLOWED_USERNAMES = ["user1", "user2", "user3"]  # your list of allowed usernames
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    global data
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
-        if username in data["users"]:
-            return "Username already exists!"
 
-        # log the ip and prevent duplicates if needed
-        log_ip(username=session.get("username"), page=request.path)
+        # Check if username is in allowed list
+        if username not in ALLOWED_USERNAMES:
+            abort(403)
 
-        # get the current ip address
+        # Check if username exists in the database
+        existing_user = get_user(username)
+        if existing_user:
+            abort(400)
+
+        # Hash the password
+        hashed_password = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+
+        # Get current IP
         ip_address = request.remote_addr
 
-        # add user with ip info
-        data["users"][username] = {
-            "password": password,
+        # Prepare user data
+        user_data = {
+            "username": username,
+            "password": hashed_password,
             "is_admin": False,
             "bio": "",
+            "pfp": "",
+            "custom_css": "",
+            "display_name": "",
             "ip": ip_address,
         }
 
-        # save to disk
-        save_data()
+        # Save new user to database
+        create_user(user_data)
 
+        # Log the IP (optional)
+        log_ip(username=session.get("username"), page=request.path)
+
+        # Log the user in
         session["username"] = username
+
         return redirect(url_for("index"))
 
-    # for get request render the registration form
+    # For GET, render registration form
     return render_template(
         "register.html",
         user=session.get("username"),
@@ -524,8 +703,6 @@ def register():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    global data  # declare to access and modify the global data
-
     username = ""
     user = None
     admin_status = False
@@ -534,24 +711,38 @@ def login():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
-        user = get_user(username)
+        user = get_user(username)  # fetch user from database
+
         print("Fetched user:", user)  # debug print
 
         if not user:
-            return "User not found", 404
+            abort(404)
 
         # check if user is banned
         if user.get("banned"):
-            return "This user has been banned.", 403
+            abort(403)
 
-        if data["users"][username]["password"] == password:
+        # retrieve the stored hashed password
+        stored_hashed = user.get("password")  # stored as string
+
+        # verify password with bcrypt
+        if bcrypt.checkpw(password.encode("utf-8"), stored_hashed.encode("utf-8")):
+            # password is correct
+
             # get current ip
             ip_address = request.remote_addr
+
             # log the ip in the audit log
             log_ip(username=session.get("username"), page=request.path)
 
-            # update the user's stored ip
-            data["users"][username]["ip"] = ip_address
+            # update the user's ip in the database
+            # Assuming your user table has an 'ip' column
+            conn = get_db_connection()
+            conn.execute(
+                "UPDATE users SET ip = ? WHERE username = ?", (ip_address, username)
+            )
+            conn.commit()
+            conn.close()
 
             # set session variables
             session["username"] = username
@@ -563,7 +754,7 @@ def login():
         else:
             return "Invalid credentials"
 
-    # for get request prepare variables for rendering the template
+    # for GET request
     logged_in = "username" in session
     if logged_in:
         username = session["username"]
@@ -588,66 +779,76 @@ def logout():
 
 @app.route("/delete_fic/<int:fic_id>", methods=["POST"])
 def delete_fic(fic_id):
-    global data
-    # remove the fic with matching id
-    data["fanfics"] = [fic for fic in data["fanfics"] if fic["id"] != fic_id]
+    # Delete the fanfic from the database
+    conn = get_db_connection()
+    conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
+    conn.commit()
+    conn.close()
 
-    save_data()
+    conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
+    conn.commit()
 
     return redirect(url_for("profile"))
 
 
 @app.route("/add_tag", methods=["POST"])
 def add_tag():
-    global data  # access the global data
-
-    # get the tag from json request
+    # get the tag from JSON request
     data_in = request.get_json()
     new_tag = data_in.get("tag", "").strip()
 
     if not new_tag:
         return jsonify({"success": False, "error": "No tag provided"}), 400
 
-    # initialize tags list if not present
-    if "tags" not in data:
-        data["tags"] = []
+    # Check if the tag already exists in the database
+    conn = get_db_connection()
+    existing = conn.execute("SELECT 1 FROM tags WHERE name = ?", (new_tag,)).fetchone()
 
-    # check if the tag already exists
-    if new_tag in data["tags"]:
+    if existing:
+        conn.close()
         return jsonify({"success": True, "message": "Tag already exists"})
 
-    # add new tag
-    data["tags"].append(new_tag)
-
-    # save changes
-    save_data()
+    # Insert the new tag
+    conn.execute("INSERT INTO tags (name) VALUES (?)", (new_tag,))
+    conn.commit()
+    conn.close()
 
     return jsonify({"success": True, "tag": new_tag})
 
 
 @app.route("/profile/<username>")
 def user_profile(username):
-    global data  # declare to access the global data
+    # Fetch user details from the database
     user = get_user(username)
-    print("Fetched user:", user)  # Debug
     if not user:
-        return "User not found", 404
+        abort(404)
+
     user["username"] = username
-    admin_status = is_admin()
-    user_fanfics = [fic for fic in data["fanfics"] if fic["owner"] == username]
+
+    # Check if the current logged-in user is the owner
     is_owner = username == session.get("username")
-    print("Session username:", session.get("username"))
-    print("Is owner:", is_owner)
     logged_in = "username" in session
-    # beer
+    admin_status = is_admin()
+
+    # Fetch fanfics owned by the user from the database
+    conn = get_db_connection()
+    fanfics_rows = conn.execute(
+        "SELECT * FROM fanfics WHERE owner = ?", (username,)
+    ).fetchall()
+    conn.close()
+
+    # Convert to list of dicts
+    fanfics = [dict(row) for row in fanfics_rows]
+
+    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 3
-    total_fanfics = len(user_fanfics)
+    total_fanfics = len(fanfics)
     total_pages = (total_fanfics + per_page - 1) // per_page
-
     start = (page - 1) * per_page
     end = start + per_page
-    display_fanfics = user_fanfics[start:end]
+    display_fanfics = fanfics[start:end]
+
     return render_template(
         "profile.html",
         fanfics=display_fanfics,
@@ -664,42 +865,38 @@ def user_profile(username):
 
 @app.route("/profile")
 def profile():
-    is_logged_in = logged_in()
-    if not is_logged_in:
+    if not logged_in():
         return redirect(url_for("login"))
 
     username = session["username"]
     user = get_user(username)
     if not user:
-        return "User not found", 404
+        abort(404)
 
-    # data
-    global data
+    # Log IP
+    log_ip(username=username, page=request.path)
 
-    # extract botes
-    notes_data = data.get("notes", {})
+    # Fetch fanfics owned by the user from the database
+    conn = get_db_connection()
+    fanfics_rows = conn.execute(
+        "SELECT * FROM fanfics WHERE owner = ?", (username,)
+    ).fetchall()
+    conn.close()
 
-    log_ip(username=session.get("username"), page=request.path)
+    fanfics = [dict(row) for row in fanfics_rows]
 
-    # add username
-    user["username"] = username
-    admin_status = is_admin()
-
-    # filter fics
-    user_fanfics = [fic for fic in data["fanfics"] if fic["owner"] == username]
-
-    # assume the logged in user is viewing their own profile
-    is_owner = True
-
-    # beer berr beeeeee vodka truqila
+    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 3
-    total_fanfics = len(user_fanfics)
+    total_fanfics = len(fanfics)
     total_pages = (total_fanfics + per_page - 1) // per_page
-
     start = (page - 1) * per_page
     end = start + per_page
-    display_fanfics = user_fanfics[start:end]
+    display_fanfics = fanfics[start:end]
+
+    # Assuming notes are stored in the database, fetch notes if needed
+    # For now, using placeholder
+    notes_data = {}  # Replace with actual database fetch if applicable
 
     return render_template(
         "profile.html",
@@ -707,10 +904,10 @@ def profile():
         notes=notes_data,
         username=username,
         session=session,
-        logged_in=is_logged_in,
+        logged_in=True,
         user=user,
-        is_owner=is_owner,
-        is_admin=admin_status,
+        is_owner=True,  # Since this is your profile page
+        is_admin=is_admin(),
         current_page=page,
         total_pages=total_pages,
     )
@@ -718,90 +915,87 @@ def profile():
 
 @app.route("/edit_profile", methods=["GET", "POST"])
 def edit_profile():
-    global data
-
-    print("edit_profile route hit")
-    logged_in = "username" in session
-    if not logged_in:
+    if "username" not in session:
         return redirect(url_for("login"))
 
     old_username = session["username"]
     user = get_user(old_username)
     if not user:
-        return "User not found", 404
+        abort(404)
 
     if request.method == "POST":
-        # get form data
+        # Get form data
         new_username = request.form.get("username").strip()
         new_bio_raw = request.form.get("bio", "")
         pfp_file = request.files.get("pfp")
         new_custom_css = request.form.get("custom_css")
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
 
-        # bleach
+        # Verify current password before changing
+        if new_password:
+            stored_hash = user.get("password", "")
+            if not stored_hash:
+                abort(403)  # No valid password stored
+
+            # Verify using bcrypt
+            if not bcrypt.checkpw(
+                current_password.encode("utf-8"), stored_hash.encode("utf-8")
+            ):
+                abort(403)
+
+        # Sanitize bio
         new_bio = sanitize_bio(new_bio_raw.strip())
 
-        log_ip(username=session.get("username"), page=request.path)
-
-        # pfps
+        # Handle profile picture upload
         if pfp_file and pfp_file.filename != "":
             filename = secure_filename(pfp_file.filename)
             upload_dir = os.path.join(app.static_folder, "pfps")
             os.makedirs(upload_dir, exist_ok=True)
             upload_path = os.path.join(upload_dir, filename)
-            print("Saving file to:", upload_path)  # Debug
+            print("Saving file to:", upload_path)
             pfp_file.save(upload_path)
             user["pfp"] = f"pfps/{filename}"
-            print("Stored image path:", user["pfp"])  # Debug
 
-        # username change
+        # Update username if changed
         if new_username != old_username:
-            # move user data to new key
-            data["users"][new_username] = data["users"].pop(old_username)
-            # update session username
+            if get_user(new_username):
+                abort(400)
+            # Update user in database
+            update_user(
+                {
+                    "username": new_username,
+                    "bio": new_bio,
+                    "custom_css": new_custom_css,
+                    "pfp": user.get("pfp", ""),
+                }
+            )
+            # Update session
             session["username"] = new_username
 
-            # update all fanfics owned and authored by that user
-            for fic in data["fanfics"]:
-                if fic["owner"] == old_username:
-                    fic["owner"] = new_username
-                if fic["author"] == old_username:
-                    fic["author"] = new_username
+            # Update fanfics owned/authored
+            conn = get_db_connection()
+            conn.execute(
+                "UPDATE fanfics SET owner = ?, author = ? WHERE owner = ?",
+                (new_username, new_username, old_username),
+            )
+            conn.commit()
+            conn.close()
+        else:
+            # Update user info without changing username
+            user["bio"] = new_bio
+            user["custom_css"] = new_custom_css
 
-            # update all notes owned by the user
-            for note_id, note_value in data.get("notes", {}).items():
-                # handle whatever this is being delete dproably
-                if isinstance(note_value, str):
-                    try:
-                        note_obj = json.loads(note_value)
-                    except json.JSONDecodeError:
-                        continue
-                elif isinstance(note_value, dict):
-                    note_obj = note_value
-                else:
-                    continue
-
-                if note_obj.get("owner") == old_username:
-                    note_obj["owner"] = new_username
-                    # save back the note
-                    if isinstance(note_value, str):
-                        data["notes"][note_id] = json.dumps(note_obj)
-                    else:
-                        data["notes"][note_id] = note_obj
-
-            # update comment usernames from old to ne
-            for fic in data["fanfics"]:
-                for comment in fic.get("comments", []):
-                    if comment.get("name") == old_username:
-                        comment["name"] = new_username
-
-        # update user data
-        user = get_user(new_username)  # get the updated user object after moving
-        user["username"] = new_username
-        user["bio"] = new_bio
-        user["custom_css"] = new_custom_css
-
-        save_user(user)
-        save_data()
+        # Handle password change
+        if new_password:
+            # Hash with bcrypt
+            hashed_password = bcrypt.hashpw(
+                new_password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+            update_user_password(user["username"], hashed_password)
+        else:
+            # No password change, just update user info
+            update_user(user)
 
         return redirect(url_for("profile"))
 
@@ -812,108 +1006,187 @@ def edit_profile():
         username=old_username,
         session=session,
         is_owner=True,
-        logged_in=logged_in,
+        logged_in=True,
     )
+
+
+###### yuh
 
 
 @app.route("/submit", methods=["GET", "POST"])
 def submit():
-    global data
     if not logged_in():
         return redirect(url_for("login"))
 
-    # update global tags list from all fanfics
-    all_tags = set()
-    for f in data["fanfics"]:
-        all_tags.update(f.get("tags", []))
-    data["tags"] = list(all_tags)
-    save_data()
-
     log_ip(username=session.get("username"), page=request.path)
-    tags = data["tags"]
+
+    # Fetch all tags for display
+    conn = get_db_connection()
+    all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
+
+    # Prepare tag list
+    all_tags = [row["name"] for row in all_tags_rows]
 
     if request.method == "POST":
-        # gen fanfic id
-        new_id = max([f["id"] for f in data["fanfics"]], default=0) + 1
+        # Generate new fanfic ID
+        max_id_row = conn.execute("SELECT MAX(id) FROM fanfics").fetchone()
+        new_id = (max_id_row[0] or 0) + 1
 
-        # collect all chapters
+        # Collect chapters
         chapters = []
         pattern_title = re.compile(r"chapter_title_(\d+)")
-        pattern_content = re.compile(r"chapter_content_(\d+)")
         for key in request.form:
             match = pattern_title.match(key)
             if match:
                 index = match.group(1)
                 title = request.form.get(f"chapter_title_{index}")
                 content = request.form.get(f"chapter_content_{index}")
-                if title or content:  # ignore empty
-                    # the new norm
+                if title or content:
                     content = re.sub(r"\n+", "\n", content.strip()) if content else ""
                     chapters.append({"title": title, "content": content})
 
         print("Collected chapters:", chapters)
 
-        # get tags selected
+        # Get and process tags
         selected_tags = request.form.getlist("tags")
-        # get new tag entered
         new_tag = request.form.get("new_tag", "").strip()
 
-        # combine tags avoiding dupes
         combined_tags = list(set(selected_tags))
         if new_tag:
             combined_tags.append(new_tag)
 
         age_rating = request.form.get("age_rating")
 
-        new_fic = {
-            "id": new_id,
-            "title": request.form["title"],
-            "author": session["username"],
-            "owner": session["username"],
-            "fandom": request.form["fandom"],
-            "stats": {"words": 0, "chapters": len(chapters), "kudos": 0},
-            "tags": combined_tags,
-            "age_rating": age_rating,
-            "chapters": chapters,
-            "comments": [],
-            "kudos": [],
-        }
+        # Insert into fanfics table (without chapters)
+        conn.execute(
+            """
+            INSERT INTO fanfics (
+                id, title, author, owner, fandom, comments, kudos, age_rating
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id,
+                request.form["title"],
+                session["username"],
+                session["username"],
+                request.form["fandom"],
+                json.dumps([]),  # comments
+                json.dumps([]),  # kudos
+                age_rating,
+            ),
+        )
+        conn.commit()
 
-        data["fanfics"].append(new_fic)
-        print("New fanfic added with chapters:", new_fic["chapters"])
-        save_data()
+        # Insert chapters into chapters table
+        for index, chapter in enumerate(chapters):
+            conn.execute(
+                "INSERT INTO chapters (fanfic_id, id, title, content) VALUES (?, ?, ?, ?)",
+                (new_id, index + 1, chapter["title"], chapter["content"]),
+            )
 
-        return redirect(url_for("view_fic", fid=new_fic["id"]))
+        # Insert tags into tags and associate with fanfic
+        for tag in combined_tags:
+            conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+            tag_id_row = conn.execute(
+                "SELECT id FROM tags WHERE name = ?", (tag,)
+            ).fetchone()
+            if tag_id_row:
+                tag_id = tag_id_row["id"]
+                conn.execute(
+                    "INSERT INTO fanfic_tags (fanfic_id, tag_id) VALUES (?, ?)",
+                    (new_id, tag_id),
+                )
 
+        conn.commit()
+        conn.close()
+
+        print("New fanfic added with chapters:", chapters)
+        return redirect(url_for("view_fic", fid=new_id))
+
+    # For GET, render the form
     return render_template(
         "fanfic/submit.html",
-        data=data,
-        logged_in=logged_in(),
-        tags=tags,
+        logged_in=True,
+        tags=all_tags,
         is_admin=is_admin(),
     )
 
 
 @app.route("/fic/<int:fid>")
 def view_fic(fid):
-    global data
+    conn = get_db_connection()
 
-    fic = next((f for f in data["fanfics"] if f["id"] == fid), None)
-    if not fic:
-        return "Fanfic not found", 404
+    # Fetch the main fanfic record
+    fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
+    if not fanfic_row:
+        conn.close()
+        abort(404)
 
-    # normalize each chapter's content
-    for chapter in fic.get("chapters", []):
+    fanfic = dict(fanfic_row)
+
+    # Parse comments
+    comments_json = fanfic.get("comments")
+    if comments_json:
+        try:
+            comments = json.loads(comments_json)
+        except json.JSONDecodeError:
+            comments = []
+    else:
+        comments = []
+
+    # Deduplicate comments
+    unique_comments = []
+    seen = set()
+    for c in comments:
+        key = (c["name"], c["content"])
+        if key not in seen:
+            seen.add(key)
+            unique_comments.append(c)
+    fanfic["comments"] = unique_comments
+
+    # Parse kudos (assuming stored as JSON array of usernames)
+    kudos_json = fanfic.get("kudos")
+    if kudos_json:
+        try:
+            kudos_list = json.loads(kudos_json)
+        except json.JSONDecodeError:
+            kudos_list = []
+    else:
+        kudos_list = []
+
+    # You can process kudos as needed, e.g., deduplicate
+    kudos = list(set(kudos_list))
+
+    # Fetch chapters
+    chapters_rows = conn.execute(
+        "SELECT * FROM chapters WHERE fanfic_id = ?", (fid,)
+    ).fetchall()
+
+    # Fetch tags
+    tags_rows = conn.execute(
+        "SELECT t.name FROM tags t JOIN fanfic_tags ft ON t.id = ft.tag_id WHERE ft.fanfic_id = ?",
+        (fid,),
+    ).fetchall()
+
+    # Close the connection after all queries
+    conn.close()
+
+    # Process chapters content
+    chapters = [dict(c) for c in chapters_rows] if chapters_rows else []
+    for chapter in chapters:
         if "content" in chapter:
-            # remove leading whitespace from each line
             chapter["content"] = re.sub(
                 r"^\s+", "", chapter["content"], flags=re.MULTILINE
-            )
-            # remove leading/trailing whitespace from entire content
-            chapter["content"] = chapter["content"].strip()
-            # collapse multiple blank lines into one
+            ).strip()
             chapter["content"] = re.sub(r"\n\s*\n+", "\n\n", chapter["content"])
 
+    tags = [row["name"] for row in tags_rows]
+
+    # Pass kudos to template
+    # You can pass the list directly, or create a string for display
+    kudos_display = kudos
+
+    # Helper functions
     def logged_in():
         return "username" in session
 
@@ -922,68 +1195,201 @@ def view_fic(fid):
     is_admin = False
     username = session.get("username")
     if username:
-        user = data["users"].get(username)
+        user = get_user(username)
         if user and user.get("is_admin"):
             is_admin = True
 
+    # Debug
+    print("Kudos:", kudos_display)
+
     return render_template(
-        "fanfic/view_fic.html", fic=fic, logged_in=logged_in(), is_admin=is_admin
+        "fanfic/view_fic.html",
+        fic=fanfic,
+        chapters=chapters,
+        tags=tags,
+        kudos=kudos_display,
+        logged_in=logged_in(),
+        is_admin=is_admin,
     )
 
 
 @app.route("/edit/<int:fid>", methods=["GET", "POST"])
 def edit_fic(fid):
-    global data
-
-    fic = next((f for f in data["fanfics"] if f["id"] == fid), None)
-    if not fic:
+    # Fetch the fanfic from the database
+    conn = get_db_connection()
+    fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
+    if not fanfic_row:
+        conn.close()
         return "Fanfic not found"
-    if not logged_in() or fic["owner"] != session["username"]:
+
+    # Check ownership and login
+    if not logged_in() or fanfic_row["owner"] != session["username"]:
+        conn.close()
         return "Unauthorized"
 
-    all_tags = set()
-    for f in data["fanfics"]:
-        all_tags.update(f.get("tags", []))
-    all_tags = list(all_tags)
+    # Fetch all tags for display
+    all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
+    all_tags = [row["name"] for row in all_tags_rows]
 
-    log_ip(username=session.get("username"), page=request.path)
+    # Fetch chapters
+    chapters_rows = conn.execute(
+        "SELECT * FROM chapters WHERE fanfic_id = ? ORDER BY id", (fid,)
+    ).fetchall()
+    chapters = [dict(c) for c in chapters_rows]
 
+    # Fetch tags associated with this fanfic
+    tags_rows = conn.execute(
+        "SELECT t.name FROM tags t JOIN fanfic_tags ft ON t.id = ft.tag_id WHERE ft.fanfic_id = ?",
+        (fid,),
+    ).fetchall()
+    current_tags = [row["name"] for row in tags_rows]
+
+    # Parse comments JSON
+    comments_json = fanfic_row["comments"]
+    if comments_json:
+        try:
+            comments = json.loads(comments_json)
+        except json.JSONDecodeError:
+            comments = []
+    else:
+        comments = []
+
+    # Parse kudos JSON
+    kudos_json = fanfic_row["kudos"]
+    if kudos_json:
+        try:
+            kudos = json.loads(kudos_json)
+        except json.JSONDecodeError:
+            kudos = []
+    else:
+        kudos = []
+
+    # Handle POST request for updating fanfic
     if request.method == "POST":
         selected_tags = request.form.getlist("tags")
-
         new_tag = request.form.get("new_tag", "").strip()
-
         if new_tag:
             selected_tags.append(new_tag)
+        # Deduplicate tags
+        updated_tags = list(set(selected_tags))
 
-        # dupes
-        fic["tags"] = list(set(selected_tags))
+        # Collect chapters
+        chapters = []
+        pattern_title = re.compile(r"chapter_title_(\d+)")
+        for key in request.form:
+            match = pattern_title.match(key)
+            if match:
+                index = match.group(1)
+                title = request.form.get(f"chapter_title_{index}")
+                content = request.form.get(f"chapter_content_{index}")
+                if title or content:
+                    content = re.sub(r"\n+", "\n", content.strip()) if content else ""
+                    chapters.append({"title": title, "content": content})
 
-        fic["title"] = request.form["title"]
-        fic["fandom"] = request.form["fandom"]
-        fic["chapters"][0]["title"] = request.form["chapter_title"]
-        fic["chapters"][0]["content"] = request.form["content"]
+        # Update main fanfic fields
+        conn.execute(
+            "UPDATE fanfics SET title=?, fandom=?, age_rating=? WHERE id=?",
+            (
+                request.form["title"],
+                request.form["fandom"],
+                request.form.get("age_rating", "13+"),
+                fid,
+            ),
+        )
 
-        age_rating = request.form.get("age_rating")
-        if age_rating in ["18+", "16+", "13+"]:
-            fic["age_rating"] = age_rating
-        else:
-            # fallback or error handling if needed
-            fic["age_rating"] = "13+"
+        # Update chapters: delete existing and insert new
+        conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fid,))
+        for index, chapter in enumerate(chapters):
+            conn.execute(
+                "INSERT INTO chapters (fanfic_id, id, title, content) VALUES (?, ?, ?, ?)",
+                (fid, index + 1, chapter["title"], chapter["content"]),
+            )
 
-        save_data()
+        # Update tags: delete old associations and add new
+        conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fid,))
+        for tag in updated_tags:
+            # Insert tag if not exists
+            conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+            tag_id_row = conn.execute(
+                "SELECT id FROM tags WHERE name = ?", (tag,)
+            ).fetchone()
+            if tag_id_row:
+                conn.execute(
+                    "INSERT INTO fanfic_tags (fanfic_id, tag_id) VALUES (?, ?)",
+                    (fid, tag_id_row["id"]),
+                )
 
+        # Save comments and kudos back (assuming you want to keep existing comments/kudos
+
+        conn.commit()
+        conn.close()
         return redirect(url_for("view_fic", fid=fid))
 
+    conn.close()
+    # Render edit form with current data
     return render_template(
         "fanfic/edit_fic.html",
-        fic=fic,
-        data=data,
+        fic={
+            "id": fid,
+            "title": fanfic_row["title"],
+            "fandom": fanfic_row["fandom"],
+            "age_rating": fanfic_row["age_rating"],
+            "comments": comments,
+            "kudos": kudos,
+            "owner": fanfic_row["owner"],
+            "tags": current_tags,
+            "chapters": chapters,
+        },
+        all_tags=all_tags,
         logged_in=logged_in(),
-        tags=all_tags,
         is_owner=True,
         is_admin=is_admin(),
     )
+
+
+@app.route("/kudo/<int:fid>", methods=["POST"])
+def add_kudo(fid):
+    if not logged_in():
+        return redirect(url_for("login"))
+
+    # Connect to the database
+    conn = get_db_connection()
+
+    # Fetch the fanfic record
+    fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
+    if not fanfic_row:
+        conn.close()
+        abort(404)
+
+    fanfic = dict(fanfic_row)
+
+    # Parse current kudos
+    kudos_json = fanfic.get("kudos")
+    if kudos_json:
+        try:
+            kudos_list = json.loads(kudos_json)
+        except json.JSONDecodeError:
+            kudos_list = []
+    else:
+        kudos_list = []
+
+    user = session["username"]
+    if user not in kudos_list:
+        kudos_list.append(user)
+
+        # Save updated kudos back to the database
+        updated_kudos_json = json.dumps(kudos_list)
+        conn.execute(
+            "UPDATE fanfics SET kudos = ? WHERE id = ?", (updated_kudos_json, fid)
+        )
+        conn.commit()
+
+        # Log IP
+        log_ip(username=user, page=request.path)
+
+    conn.close()
+
+    return redirect(url_for("view_fic", fid=fid))
 
 
 def user_exists(username):
@@ -1004,231 +1410,279 @@ def linkify_mentions(content):
 
 @app.route("/comment/<int:fid>", methods=["POST"])
 def add_comment(fid):
-    global data
     if not logged_in():
         return redirect(url_for("login"))
 
-    fic = next((f for f in data["fanfics"] if f["id"] == fid), None)
-    if not fic:
-        return "Fanfic not found"
+    # Fetch current fanfic record
+    conn = get_db_connection()
+    fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
+    if not fanfic_row:
+        conn.close()
+        abort(404)
 
+    fanfic = dict(fanfic_row)
+
+    # Parse existing comments JSON
+    comments_json = fanfic.get("comments")
+    if comments_json:
+        try:
+            comments = json.loads(comments_json)
+        except json.JSONDecodeError:
+            comments = []
+    else:
+        comments = []
+
+    # Prepare new comment
     content = request.form["content"]
-    # convert mentions to links
     content_with_links = linkify_mentions(content)
-
-    # get current time
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    username = session["username"]
+    user = get_user(username)  # assuming you have this function
+    pfp_path = user["pfp"] if user and "pfp" in user else ""
 
-    # get current user data
-    user = next(
-        (u for u in data["users"].values() if u["username"] == session["username"]),
-        None,
+    new_comment = {
+        "name": username,
+        "content": content_with_links,
+        "timestamp": timestamp,
+        "pfp": pfp_path,
+        "user": user,  # optional, if you want to store full user info
+    }
+
+    # Append new comment
+    comments.append(new_comment)
+
+    # Save updated comments JSON back to the database
+    updated_comments_json = json.dumps(comments)
+    conn.execute(
+        "UPDATE fanfics SET comments = ? WHERE id = ?", (updated_comments_json, fid)
     )
+    conn.commit()
+    conn.close()
 
-    print("Type of data['users']:", type(data["users"]))
-    print("Data contents:", data["users"])
-
-    # use pfp directly
-    pfp_path = user["pfp"] if user and "pfp" in user and user["pfp"] else ""
-
-    # append with pfp path
-    fic["comments"].append(
-        {
-            "name": session["username"],
-            "content": content_with_links,
-            "timestamp": timestamp,
-            "pfp": pfp_path,
-            "user": user,
-        }
-    )
-
-    # debug output
-    print("Stored pfp in comment:", pfp_path)
-    print("Comments' pfp paths:")
-    for c in fic["comments"]:
-        print(c.get("pfp", "No pfp key"))
-
-    log_ip(username=session.get("username"), page=request.path)
-    save_data()
-    return redirect(url_for("fanfic/view_fic", fid=fid))
+    log_ip(username=username, page=request.path)
+    return redirect(url_for("view_fic", fid=fid))
 
 
 @app.route("/delete_comment/<int:fid>/<int:comment_index>", methods=["POST"])
 def delete_comment(fid, comment_index):
-    global data
     if not logged_in():
         return redirect(url_for("login"))
 
-    fic = next((f for f in data["fanfics"] if f["id"] == fid), None)
-    if not fic:
+    # Fetch the fanfic from database
+    conn = get_db_connection()
+    fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
+    if not fanfic_row:
+        conn.close()
         return "Fanfic not found"
 
-    # is comment index valid? probably not
-    if comment_index < 0 or comment_index >= len(fic["comments"]):
-        return "Comment not found"
+    fanfic = dict(fanfic_row)
 
-    comment = fic["comments"][comment_index]
+    # Decode comments JSON
+    comments_json = fanfic.get("comments")
+    if comments_json:
+        try:
+            comments = json.loads(comments_json)
+        except json.JSONDecodeError:
+            comments = []
+    else:
+        comments = []
 
-    # debug
+    # Validate index
+    if comment_index < 0 or comment_index >= len(comments):
+        conn.close()
+        abort(404)
+
+    comment = comments[comment_index]
     current_user = session.get("username")
     is_admin = session.get("is_admin", False)
 
-    print("Current user:", current_user)
-    print("Is admin:", is_admin)
-    print("Comment owner:", comment["name"])
-
-    # check perms
+    # Check permissions
     if comment["name"] != current_user and not is_admin:
-        return "Unauthorized", 403
+        conn.close()
+        abort(403)
 
-    # remove comment
-    fic["comments"].pop(comment_index)
+    # Remove comment
+    comments.pop(comment_index)
 
-    save_data()
+    # Save updated comments json back to database
+    updated_comments_json = json.dumps(comments)
+    conn.execute(
+        "UPDATE fanfics SET comments = ? WHERE id = ?", (updated_comments_json, fid)
+    )
+    conn.commit()
+    conn.close()
 
-    # log deletion
+    # Log deletion
     log_ip(username=current_user, page=request.path)
 
-    return redirect(url_for("fanfic/view_fic", fid=fid))
+    return redirect(url_for("view_fic", fid=fid))
+
+
+# fully refactored above
 
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
-    global data
-    load_banned_ips()
-
     current_ip = request.remote_addr
-    if current_ip in banned_ips:
-        return "Your IP has been banned.", 403
 
+    # Check if IP is banned
+    if is_ip_banned(current_ip):
+        abort(403)
+
+    # Check user session and admin status
     username = session.get("username")
-    user = None
-    is_admin = False
+    if not username:
+        abort(404)
 
-    if username:
-        user = data["users"].get(username)
-        if user and user.get("is_admin"):
-            is_admin = True
+    user = get_user(username)
+    if not user or not user.get("is_admin"):
+        abort(403)
 
-    if not is_admin:
-        return "Access Denied", 403
+    # Log access
+    log_ip(username=username, page=request.path)
 
-    logged_in = "username" in session
-    log_ip(username=session.get("username"), page=request.path)
-
-    # prep
-    user_ips = {
-        uname: info.get("ip", "Unknown") for uname, info in data["users"].items()
-    }
-
-    # ban ip
+    # Handle banning IP via POST
     if request.method == "POST":
         ip_to_ban = request.form.get("ip")
         if ip_to_ban:
             save_banned_ip(ip_to_ban)
             return f"IP {ip_to_ban} has been banned.", 200
 
-    # pass as list of keys
-    usernames = list(data["users"].keys())
+    # Fetch all users from DB
+    users = get_all_users()
+    user_ips = {u["username"]: u.get("ip", "Unknown") for u in users}
+
+    # Fetch fanfics (assumes get_fanfics() is DB-based)
+    fanfics = get_fanfics()
 
     return render_template(
         "admin/admin.html",
-        fanfics=data["fanfics"],
+        fanfics=fanfics,
         is_admin=True,
         user=user,
         username=username,
         session=session,
-        logged_in=logged_in,
+        logged_in=True,
         user_ips=user_ips,
-        users=data["users"],
+        users=users,
     )
 
 
 @app.route("/admin/delete_user/<username>", methods=["POST"])
 def delete_user(username):
-    global data
     if not is_admin():
-        return "Access Denied", 403
-    if username in data["users"]:
-        del data["users"][username]
-        save_data()
+        abort(403)
+
+    # Fetch user from database
+    user = get_user(username)
+    if not user:
+        abort(404)
+
+    # Delete user from database
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
+    except Exception as e:
+        # Log error if needed
+        return f"Error deleting user: {str(e)}", 500
+    finally:
+        conn.close()
 
     return redirect(url_for("admin_panel"))
 
 
 @app.route("/admin/delete_fic/<int:fic_id>", methods=["POST"])
 def delete_fic_admin(fic_id):
-    global data
     if not is_admin():
         return "Access Denied", 403
-    data["fanfics"] = [f for f in data["fanfics"] if f["id"] != fic_id]
-    save_data()
+
+    conn = get_db_connection()
+    try:
+        # Check if fanfic exists
+        fanfic = conn.execute(
+            "SELECT * FROM fanfics WHERE id = ?", (fic_id,)
+        ).fetchone()
+        if not fanfic:
+            abort(404)
+
+        # Delete fanfic
+        conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
+        # Also delete associated chapters, tags, etc., if applicable
+        conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fic_id,))
+        conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
+        # Commit changes
+        conn.commit()
+    except Exception as e:
+        return f"Error deleting fanfic: {str(e)}", 500
+    finally:
+        conn.close()
+
     return redirect(url_for("admin_panel"))
 
 
 @app.route("/ban_ip", methods=["POST"])
 def ban_ip():
     if not is_admin():
-        return "Unauthorized", 403
+        abort(403)
+
     ip_to_ban = request.form["ip"]
-    save_banned_ip(ip_to_ban)
-    return f"IP {ip_to_ban} has been banned."
-
-
-@app.route("/ban_user/<username>", methods=["POST"])
-def ban_user(username):
-    global data
-    if not is_admin():
-        return "Unauthorized", 403
-    user = get_user(username)
-    if user:
-        # toggle ban status
-        current_status = user.get("banned", False)
-        user["banned"] = not current_status
-        action = "unbanned" if not user["banned"] else "banned"
-        save_data()
-        return f"User {username} has been {action}."
-    return "User not found", 404
-
-
-@app.route("/unban_user/<username>", methods=["POST"])
-def unban_user(username):
-    global data
-    if not is_admin():
-        return "Unauthorized", 403
-    if username in data["users"]:
-        data["users"][username]["banned"] = False
-        save_data()
-        return f"{username} has been unbanned."
-    return "User not found", 404
+    if is_ip_banned(ip_to_ban):
+        # If already banned, unban it
+        unban_ip(ip_to_ban)
+        return f"IP {ip_to_ban} has been unbanned."
+    else:
+        # Otherwise, ban it
+        save_banned_ip(ip_to_ban)
+        return f"IP {ip_to_ban} has been banned."
 
 
 @app.route("/admin/set_display_name/<username>", methods=["GET", "POST"])
 def set_display_name(username):
     if not is_admin():
-        return "Access denied", 403
+        abort(404)
 
     user = get_user(username)
     if not user:
-        return "User not found", 404
+        abort(404)
 
     if request.method == "POST":
-        new_display_name = request.form.get("display_name")
-        if new_display_name:
-            # ONLY set if admin
-            if user.get("is_admin"):
-                # prepend mod to display name
-                user["display_name"] = "Mod " + new_display_name
-                save_user(user)
-                return redirect(url_for("profile", username=username))
-            else:
-                return "Cannot set display name for non-admin users.", 403
-        else:
+        new_display_name = request.form.get("display_name", "").strip()
+        if not new_display_name:
             error = "Please enter a display name."
-            return render_template("set_display_name.html", user=user, error=error)
+            return render_template(
+                "admin/set_display_name.html", user=user, error=error
+            )
 
-    if "display_name" not in user:
-        user["display_name"] = user["username"]
+        # Only allow admins to set display names for users
+        if user.get("is_admin"):
+            # Update display_name in the database directly
+            conn = get_db_connection()
+            conn.execute(
+                "UPDATE users SET display_name = ? WHERE username = ?",
+                (new_display_name, username),
+            )
+            conn.commit()
+            conn.close()
+
+            return redirect(url_for("profile", username=username))
+        else:
+            abort(403)
+
+    # For GET request, ensure display_name exists in the database
+    if not user.get("display_name"):
+        # Optionally, set display_name to username if not set
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE users SET display_name = ? WHERE username = ?",
+            (user["username"], username),
+        )
+        conn.commit()
+        conn.close()
+
+        # Re-fetch user if needed
+        user = get_user(username)
+
     return render_template(
         "admin/set_display_name.html",
         user=user,
@@ -1237,66 +1691,50 @@ def set_display_name(username):
     )
 
 
-@app.route("/kudo/<int:fid>", methods=["POST"])
-def add_kudo(fid):
-    global data
-    if not logged_in():
-        return redirect(url_for("login"))
-    fic = next((f for f in data["fanfics"] if f["id"] == fid), None)
-
-    if fic is None:
-        abort(404)
-
-    user = session["username"]
-    if user not in fic["kudos"]:
-        fic["kudos"].append(user)
-
-        # log ip
-        log_ip(username=session.get("username"), page=request.path)
-
-        save_data()
-
-    return redirect(url_for("fanfic/view_fic", fid=fid))
-
-
 @app.route("/notes")
 def notes():
-    global data
     if not logged_in():
         return redirect(url_for("login"))
+
     username = session["username"]
     user = get_user(username)
     if not user:
-        return "User not found", 404
+        abort(404)
 
     log_ip(username=username, page=request.path)
 
-    all_notes = data.get("notes", {})
+    # Connect to DB
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    user_notes = {
-        note_id: note
-        for note_id, note in all_notes.items()
-        if isinstance(note, dict) and note.get("owner") == username
-    }
+    # Count total notes for pagination
+    total_notes = cursor.execute(
+        "SELECT COUNT(*) FROM notes WHERE owner = ?", (username,)
+    ).fetchone()[0]
 
-    notes_with_ids = [
-        {"id": note_id, "content": note.get("content", "")}
-        for note_id, note in user_notes.items()
-    ]
-
-    # vodka
+    # Pagination setup
     page = int(request.args.get("page", 1))
     per_page = 10
-
-    total_posts = len(notes_with_ids)
-    total_pages = (total_posts + per_page - 1) // per_page
+    total_pages = (total_notes + per_page - 1) // per_page
     start = (page - 1) * per_page
-    end = start + per_page
-    display_notes = notes_with_ids[start:end]
+
+    # Fetch notes for the current page
+    cursor.execute(
+        "SELECT id, content FROM notes WHERE owner = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+        (username, per_page, start),
+    )
+
+    notes_rows = cursor.fetchall()
+    conn.close()
+
+    # Format notes
+    notes_with_ids = [
+        {"id": row["id"], "content": row["content"]} for row in notes_rows
+    ]
 
     return render_template(
         "notes/notes.html",
-        notes=display_notes,
+        notes=notes_with_ids,
         username=username,
         session=session,
         logged_in=True,
@@ -1310,52 +1748,48 @@ def notes():
 
 @app.route("/notes/<note_id>")
 def view_note(note_id):
-    global data
     if not logged_in():
         return redirect(url_for("login"))
+
     username = session["username"]
     user = get_user(username)
     if not user:
-        return "User not found", 404
+        abort(404)
 
-    # use global data
-    all_notes = data.get("notes", {})
+    # Connect to DB
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    log_ip(username=session.get("username"), page=request.path)
+    # Fetch the note by id
+    cursor.execute("SELECT owner, content FROM notes WHERE id = ?", (note_id,))
+    row = cursor.fetchone()
+    conn.close()
 
-    # forgot
-    note_value = all_notes.get(str(note_id))
-    print("Raw note value:", note_value)
-    if not note_value:
-        return "Note not found", 404
+    if not row:
+        abort(404)
 
-    # d etermination
-    if isinstance(note_value, str):
-        try:
-            note = json.loads(note_value)
-            print("Note after json.loads:", note)
-        except json.JSONDecodeError:
-            note = {"content": note_value}
-            print("JSON decode error, using raw string as content:", note)
-    elif isinstance(note_value, dict):
-        note = note_value
-        print("Note is already a dict:", note)
-    else:
-        return "Invalid note data format", 500
+    owner = row["owner"]
+    content = row["content"]
 
-    # verification
-    print("Note owner:", note.get("owner"))
-    if note.get("owner") != username:
-        return "Unauthorized", 403
+    # Authorization check: only owner can view
+    if owner != username:
+        abort(403)
 
-    # extraction
-    note_content = note.get("content")
-    print("Note content to display:", note_content)
+    # If content is JSON, decode it
+    try:
+        note_data = json.loads(content)
+        # If note_data is a dict with 'content', extract it
+        if isinstance(note_data, dict) and "content" in note_data:
+            display_content = note_data["content"]
+        else:
+            display_content = content
+    except json.JSONDecodeError:
+        display_content = content
 
     return render_template(
         "notes/view_note.html",
         note_id=note_id,
-        note_content=note_content,
+        note_content=display_content,
         user=user,
         logged_in=True,
         session=session,
@@ -1366,7 +1800,6 @@ def view_note(note_id):
 
 @app.route("/notes/new", methods=["GET", "POST"])
 def new_note():
-    global data
     if not logged_in():
         return redirect(url_for("login"))
 
@@ -1374,25 +1807,23 @@ def new_note():
     user = get_user(username) if username else None
 
     if request.method == "POST":
-        log_ip(username=session.get("username"), page=request.path)
-
-        # note id
-        try:
-            max_id = max([int(k) for k in data.get("notes", {}).keys()])
-        except ValueError:
-            max_id = 0
-        note_id = str(max_id + 1)
+        log_ip(username=username, page=request.path)
 
         content = request.form["content"]
-
         sanitized_content = sanitize_note_content(content)
 
-        if "notes" not in data:
-            data["notes"] = {}
+        # Insert into database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO notes (owner, content) VALUES (?, ?)",
+            (username, sanitized_content),
+        )
+        conn.commit()
 
-        data["notes"][note_id] = {"owner": username, "content": sanitized_content}
-
-        save_data()
+        # Get the new note's id
+        note_id = cursor.lastrowid
+        conn.close()
 
         return redirect(url_for("view_note", note_id=note_id))
     return render_template(
@@ -1405,30 +1836,43 @@ def new_note():
 
 @app.route("/notes/<note_id>/edit", methods=["GET", "POST"])
 def edit_note(note_id):
-    global data
-    note = data["notes"].get(str(note_id))
-    if note is None:
+    # Fetch the note from the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT owner, content FROM notes WHERE id = ?", (note_id,))
+    row = cursor.fetchone()
+
+    if row is None:
+        conn.close()
         print(f"Note with ID {note_id} not found.")
         abort(404)
 
-    if note.get("owner") != session.get("username"):
-        print(f"User {session.get('username')} unauthorized to edit note {note_id}")
+    owner = row["owner"]
+    content = row["content"]
+    current_user = session.get("username")
+
+    # Check ownership
+    if owner != current_user:
+        conn.close()
+        print(f"User {current_user} unauthorized to edit note {note_id}")
         abort(403)
 
-    log_ip(username=session.get("username"), page=request.path)
+    log_ip(username=current_user, page=request.path)
 
     if request.method == "POST":
         if request.form.get("delete"):
-            # delete
-            del data["notes"][str(note_id)]
-            save_data()
+            # Delete the note
+            cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+            conn.commit()
+            conn.close()
             return redirect(url_for("notes"))
         else:
             new_content = request.form.get("content")
             if not new_content:
+                conn.close()
                 return render_template(
-                    "edit_note.html",
-                    content=note["content"],
+                    "notes/edit_note.html",
+                    content=content,
                     note_id=note_id,
                     error="Content cannot be empty",
                     delete_button=False,
@@ -1436,15 +1880,19 @@ def edit_note(note_id):
                     logged_in=logged_in(),
                 )
 
-            # bleach
             sanitized_content = sanitize_note_content(new_content)
-            note["content"] = sanitized_content
-            save_data()
+            cursor.execute(
+                "UPDATE notes SET content = ? WHERE id = ?",
+                (sanitized_content, note_id),
+            )
+            conn.commit()
+            conn.close()
             return redirect(url_for("view_note", note_id=note_id))
     else:
+        conn.close()
         return render_template(
             "notes/edit_note.html",
-            content=note["content"],
+            content=content,
             note_id=note_id,
             delete_button=False,
             is_admin=is_admin(),
@@ -1454,37 +1902,47 @@ def edit_note(note_id):
 
 @app.route("/blog")
 def blog():
-    global data
-    blog_posts = data.get("blog_posts", {})
+    # Connect to the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    # sort posts by timestamp descending
+    # Fetch all blog posts with authors
+    cursor.execute("""
+        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name
+        FROM blog_posts bp
+        LEFT JOIN users u ON bp.author = u.username
+    """)
+    posts_rows = cursor.fetchall()
+    conn.close()
+
+    # Prepare posts list
     posts = []
-    for post_id, post in blog_posts.items():
-        author_username = post["author"]
-        user = get_user(author_username)
-
-        if user:
-            display_name = user.get("display_name", author_username)
-        else:
-            display_name = author_username
+    for row in posts_rows:
+        author_display = row["display_name"] if row["display_name"] else row["author"]
+        timestamp_str = row["timestamp"]
+        try:
+            formatted_time = datetime.fromisoformat(timestamp_str).strftime(
+                "%B %d, %Y at %I:%M %p"
+            )
+        except Exception:
+            formatted_time = timestamp_str  # fallback if parsing fails
 
         posts.append(
             {
-                "id": post_id,
-                "title": post["title"],
-                "content": post["content"],
-                "author": display_name,
-                "timestamp": post["timestamp"],
-                "formatted_timestamp": datetime.fromisoformat(
-                    post["timestamp"]
-                ).strftime("%B %d, %Y at %I:%M %p"),
+                "id": row["id"],
+                "title": row["title"],
+                "content": row["content"],
+                "author": author_display,
+                "timestamp": timestamp_str,
+                "formatted_timestamp": formatted_time,
             }
         )
 
+    # Sort posts by timestamp descending
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
     print(f"Number of posts in list: {len(posts)}")
 
-    #  BEER
+    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_posts = len(posts)
@@ -1505,14 +1963,42 @@ def blog():
 
 @app.route("/blog/<post_id>")
 def view_blog_post(post_id):
-    global data
-    post = data.get("blog_posts", {}).get(post_id)
-    if not post:
-        return "Post not found", 404
+    # Connect to the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    post["formatted_timestamp"] = datetime.fromisoformat(post["timestamp"]).strftime(
-        "%B %d, %Y at %I:%M %p"
+    # Fetch the post along with author display name
+    cursor.execute(
+        """
+        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name
+        FROM blog_posts bp
+        LEFT JOIN users u ON bp.author = u.username
+        WHERE bp.id = ?
+    """,
+        (post_id,),
     )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        abort(404)
+
+    # Prepare post data
+    post = {
+        "id": row["id"],
+        "title": row["title"],
+        "content": row["content"],
+        "timestamp": row["timestamp"],
+        "author": row["display_name"] if row["display_name"] else row["author"],
+    }
+
+    # Format timestamp
+    try:
+        post["formatted_timestamp"] = datetime.fromisoformat(
+            post["timestamp"]
+        ).strftime("%B %d, %Y at %I:%M %p")
+    except Exception:
+        post["formatted_timestamp"] = post["timestamp"]  # fallback
 
     return render_template(
         "view_blog_post.html",
@@ -1525,35 +2011,35 @@ def view_blog_post(post_id):
 
 @app.route("/blog/new", methods=["GET", "POST"])
 def new_blog_post():
-    global data
     if not logged_in():
         return redirect(url_for("login"))
 
     username = session.get("username")
     user = get_user(username) if username else None
-    # admin check
+
+    # Check if user is admin
     if not user or not user.get("is_admin", False):
-        return "Unauthorized: Admins only", 403
+        abort(403)
 
     if request.method == "POST":
-        # generate a new post id
-        post_id = str(
-            max([int(k) for k in data.get("blog_posts", {}).keys()] or [0]) + 1
-        )
         title = request.form["title"]
         content = request.form["content"]
         display_name = user.get("display_name", username)
 
-        if "blog_posts" not in data:
-            data["blog_posts"] = {}
-        data["blog_posts"][post_id] = {
-            "title": title,
-            "content": content,
-            "author": display_name,
-            "timestamp": datetime.now().isoformat(),
-        }
+        # Insert new post into database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO blog_posts (title, content, author, timestamp)
+            VALUES (?, ?, ?, ?)
+            """,
+            (title, content, display_name, datetime.now().isoformat()),
+        )
+        conn.commit()
+        post_id = cursor.lastrowid
+        conn.close()
 
-        save_data()
         return redirect(url_for("view_blog_post", post_id=post_id))
     return render_template(
         "admin/new_blog_post.html",
@@ -1565,32 +2051,51 @@ def new_blog_post():
 
 @app.route("/blog/<post_id>/edit", methods=["GET", "POST"])
 def edit_blog_post(post_id):
-    global data
+    # Fetch the post from the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, title, content, author, timestamp FROM blog_posts WHERE id = ?",
+        (post_id,),
+    )
+    row = cursor.fetchone()
 
-    post = data.get("blog_posts", {}).get(post_id)
-    if not post:
-        return "Post not found", 404
+    if not row:
+        conn.close()
+        abort(404)
 
-    # check if user logged in
+    # Check if user is admin
     username = session.get("username")
     user = get_user(username) if username else None
 
     if not user or not user.get("is_admin", False):
-        return "Unauthorized: Admins only", 403
+        conn.close()
+        abort(403)
 
     if request.method == "POST":
         title = request.form["title"]
         content = request.form["content"]
-        post["title"] = title
-        post["content"] = content
-        post["timestamp"] = datetime.now().isoformat()
+        timestamp = datetime.now().isoformat()
 
-        save_data()
+        # Update the post in the database
+        cursor.execute(
+            """
+            UPDATE blog_posts
+            SET title = ?, content = ?, timestamp = ?
+            WHERE id = ?
+            """,
+            (title, content, timestamp, post_id),
+        )
+        conn.commit()
+        conn.close()
+
         return redirect(url_for("view_blog_post", post_id=post_id))
     else:
+        # Render the edit form with the current post data
+        conn.close()
         return render_template(
             "admin/edit_blog_post.html",
-            post=post,
+            post=row,
             post_id=post_id,
             is_admin=is_admin(),
             logged_in=logged_in(),
@@ -1600,52 +2105,94 @@ def edit_blog_post(post_id):
 # i kinda give up on comments sorry
 @app.route("/blog/<post_id>/delete", methods=["POST"])
 def delete_blog_post(post_id):
-    global data
+    # Connect to the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    post = data.get("blog_posts", {}).get(post_id)
+    # Check if the post exists
+    cursor.execute("SELECT id FROM blog_posts WHERE id = ?", (post_id,))
+    post = cursor.fetchone()
     if not post:
-        return "Post not found", 404
+        conn.close()
+        abort(404)
 
+    # Check admin permissions
     username = session.get("username")
     user = get_user(username) if username else None
-
     if not user or not user.get("is_admin", False):
-        return "Unauthorized: Admins only", 403
+        conn.close()
+        abort(403)
 
-    del data["blog_posts"][post_id]
-
-    save_data()
+    # Delete the post
+    cursor.execute("DELETE FROM blog_posts WHERE id = ?", (post_id,))
+    conn.commit()
+    conn.close()
 
     return redirect(url_for("blog"))
 
 
 @app.route("/about")
 def about():
-    global data
+    # Fetch site info from database or set defaults
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, content FROM site_info")
+    site_info = cursor.fetchone()
+    conn.close()
 
-    return render_template(
-        "about.html",
-        is_admin=is_admin(),
-        logged_in=logged_in(),
-    )
+    # Prepare data for template
+    if site_info:
+        current_info = {"title": site_info["title"], "content": site_info["content"]}
+    else:
+        current_info = {"title": "Default Title", "content": "Default Content"}
+
+    return render_template("about.html", site_info=current_info)
 
 
 @app.route("/admin/site-info", methods=["GET", "POST"])
 def edit_site_info():
-    global data
-    site_info = data.get("site_info", {})
+    # Connect to the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     if request.method == "POST":
-        # get updated info from form
+        # Get updated info from form
         title = request.form.get("title")
         content = request.form.get("content")
-        data["site_info"] = {"title": title, "content": content}
-        save_data()
+
+        # Check if site info exists
+        cursor.execute("SELECT * FROM site_info")
+        existing = cursor.fetchone()
+
+        if existing:
+            # Update existing record
+            cursor.execute(
+                "UPDATE site_info SET title = ?, content = ?", (title, content)
+            )
+        else:
+            # Insert new record if not exists
+            cursor.execute(
+                "INSERT INTO site_info (title, content) VALUES (?, ?)", (title, content)
+            )
+
+        conn.commit()
+        conn.close()
         return redirect(url_for("about"))
+
+    # For GET, fetch current site info
+    cursor.execute("SELECT title, content FROM site_info")
+    site_info = cursor.fetchone()
+    conn.close()
+
+    # Prepare data for template
+    if site_info:
+        current_info = {"title": site_info["title"], "content": site_info["content"]}
+    else:
+        current_info = {"title": "", "content": ""}
 
     return render_template(
         "admin/edit_site_info.html",
-        site_info=site_info,
+        site_info=current_info,
         is_admin=is_admin(),
         logged_in=logged_in(),
     )
@@ -1660,34 +2207,71 @@ def format_datetime(value):
 @app.route("/admin/logs")
 def show_logs():
     username = session.get("username")
-    users_list = list(data["users"].keys())
+    # Connect to the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch all users
+    cursor.execute("SELECT username FROM users")
+    users_list = [row["username"] for row in cursor.fetchall()]
+
+    # Fetch IP logs
+    cursor.execute("SELECT * FROM ip_logs ORDER BY timestamp DESC")
+    ip_logs = cursor.fetchall()
+
+    conn.close()
 
     return render_template(
         "admin/logs.html",
-        logs=data["ip_logs"],
-        user_logs=data.get("user_logs", {}),
+        logs=ip_logs,
+        user_logs=user_logs,
         username=username,
         users=users_list,
         is_admin=is_admin(),
-        logged_in=logged_in(),  # pass the list not a dict
+        logged_in=logged_in(),
     )
 
 
 @app.route("/admin/all_logs")
 def all_logs():
-    user_logs = data.get("user_logs", {})
-    all_logs_combined = []
+    # Pagination parameters
+    per_page = 20
+    page = request.args.get("page", 1, type=int)
+    offset = (page - 1) * per_page
 
-    for username, logs in user_logs.items():
-        for log in logs:
-            # add username info if not already in log
-            if "username" not in log:
-                log["username"] = username
-            all_logs_combined.append(log)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch total count to calculate total pages
+    cursor.execute("SELECT COUNT(*) FROM ip_logs")
+    total_count = cursor.fetchone()[0]
+    total_pages = (total_count + per_page - 1) // per_page  # ceiling division
+
+    # Fetch logs for current page
+    cursor.execute(
+        "SELECT username, ip, timestamp, page FROM ip_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        (per_page, offset),
+    )
+    logs_rows = cursor.fetchall()
+
+    # Convert to list of dicts
+    all_logs = [
+        {
+            "username": row["username"],
+            "ip": row["ip"],
+            "timestamp": row["timestamp"],
+            "page": row["page"],
+        }
+        for row in logs_rows
+    ]
+
+    conn.close()
 
     return render_template(
         "admin/all_logs.html",
-        logs=all_logs_combined,
+        logs=all_logs,
+        current_page=page,
+        total_pages=total_pages,
         is_admin=is_admin(),
         logged_in=logged_in(),
     )
@@ -1695,11 +2279,31 @@ def all_logs():
 
 @app.route("/admin/logs/<username>")
 def user_logs(username):
-    user_logs = data.get("user_logs", {}).get(username, [])  # default to empty list
-    users = list(data["users"].keys())
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Fetch all users for the dropdown/navigation
+    cursor.execute("SELECT username FROM users")
+    users = [row["username"] for row in cursor.fetchall()]
+
+    # Fetch IP logs for the specific user
+    cursor.execute(
+        "SELECT ip, timestamp, page FROM ip_logs WHERE username = ? ORDER BY timestamp DESC",
+        (username,),
+    )
+    logs = cursor.fetchall()
+
+    # Convert logs to list of dicts for easier use in template
+    user_logs_list = [
+        {"ip": row["ip"], "timestamp": row["timestamp"], "page": row["page"]}
+        for row in logs
+    ]
+
+    conn.close()
+
     return render_template(
         "admin/user_logs.html",
-        user_logs=user_logs,
+        user_logs=user_logs_list,
         username=username,
         users=users,
         is_admin=is_admin(),

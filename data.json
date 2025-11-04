@@ -1,7 +1,7 @@
 {
   "users": {
     "alice": {
-      "password": "password",
+      "password": "$2b$12$.D1TUj8JOA8UWsYC0prHaO23hSef3IpwlmXD4vFP.cWltFMg3ujqG",
       "is_admin": false,
       "bio": "                ",
       "pfp": "",
@@ -9,7 +9,7 @@
       "custom_css": ""
     },
     "pastrychan": {
-      "password": "FujoshiForever45",
+      "password": "$2b$12$WsreIpbX4cuMikdEd3SpTOjeS3fsIzrKQ4n9LbrPg6SDm.QbTeySG",
       "is_admin": false,
       "bio": "Fangirl and fanfic writer!!!!",
       "username": "pastrychan",
@@ -24,7 +24,7 @@
       ]
     },
     "marcheesed": {
-      "password": "password",
+      "password": "$2b$12$DD/BPxH6nHoNZd49b25EdelgSYFpwLLUhoDir0s5zkwwutGB94SMO",
       "is_admin": true,
       "bio": "<img src=\"https://file.garden/aBi0tvXzESnPXzr_/Amy.webp\">site maker yeah baby",
       "username": "marcheesed",
@@ -40,12 +40,18 @@
       "display_name": "Mod Marcy"
     },
     "bobby": {
-      "password": "monster",
+      "password": "$2b$12$.TgyPYTmDOnuKv/WgjLov.o4UHz5JjNNzx9CGP/v4IlWCWA0lW1gK",
       "is_admin": false,
       "bio": "aawdwdwad",
       "ip": "127.0.0.1",
       "username": "bobby",
       "custom_css": ""
+    },
+    "testaccount": {
+      "password": "$2b$12$QPOnud4Vyw4vUHqqCod7Xepja4uFSdjYvxWG19TkMgxtNueeE4Yai",
+      "is_admin": false,
+      "bio": "",
+      "ip": "127.0.0.1"
     }
   },
   "tags": [
@@ -595,6 +601,16 @@
         "ip": "127.0.0.1",
         "timestamp": "2025-11-03T21:21:15.212792",
         "page": "/"
+      },
+      {
+        "ip": "127.0.0.1",
+        "timestamp": "2025-11-03T21:46:28.363243",
+        "page": "/profile"
+      },
+      {
+        "ip": "127.0.0.1",
+        "timestamp": "2025-11-03T23:07:52.185738",
+        "page": "/"
       }
     ],
     "pastrychan": [
@@ -632,6 +648,13 @@
       {
         "ip": "127.0.0.1",
         "timestamp": "2025-10-24T17:27:59.240693",
+        "page": "/"
+      }
+    ],
+    "testaccount": [
+      {
+        "ip": "127.0.0.1",
+        "timestamp": "2025-11-03T21:46:38.301719",
         "page": "/"
       }
     ]

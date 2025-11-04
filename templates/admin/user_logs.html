@@ -4,6 +4,11 @@
         <meta charset="UTF-8" />
         <title>{{ username }} Logs</title>
         <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
+        <link
             rel="stylesheet"
             href="{{ url_for('static', filename='style.css') }}"
         />
@@ -101,7 +106,7 @@
             </div>
             <div class="container-1">
                 <h1>Logs for {{ username }}</h1>
-                <table>
+                <table border="1">
                     <tr>
                         <th>IP</th>
                         <th>Timestamp</th>

@@ -245,3 +245,20 @@ pre {
     display: flex;
     justify-content: space-between;
 }
+
+input[type="text"],
+input[type="password"],
+textarea {
+    width: 100%;
+    padding: 0.6em;
+    margin-top: 0.2em;
+    margin-bottom: 0.8em;
+    border: 2px solid var(--card-border);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-family: "Georgia", serif;
+    resize: vertical;
+    font-size: 1em;
+    box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
+}

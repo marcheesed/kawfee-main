@@ -4,6 +4,11 @@
         <meta charset="UTF-8" />
         <title>{{ fic.title }}</title>
         <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
+        <link
             rel="stylesheet"
             href="{{ url_for('static', filename='style.css') }}"
         />
@@ -106,11 +111,18 @@
                 <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
                 <p>Age Rating: {{ fic["age_rating"] }}</p>
                 <div id="chapterDisplay">
-                    <h2>{{ fic.chapters[0].title }}</h2>
                     <div class="chapter-content">
-                        <pre class="fic-text" style="white-space: pre-wrap">
-{{ fic.chapters[0].content | safe }} </pre
-                        >
+                        {% if chapters %}
+                        <h2>{{ chapters[0].title }}</h2>
+                        <div class="chapter-content">
+                            <pre class="fic-text" style="white-space: pre-wrap">
+                        {{ chapters[0].content | safe }}
+                        </pre
+                            >
+                        </div>
+                        {% else %}
+                        <p>No chapters available.</p>
+                        {% endif %}
                     </div>
                 </div>
                 <h3>Tags</h3>
@@ -119,15 +131,15 @@
                     <span>{{ tag }}</span>
                     {% endfor %}
                 </p>
-                <h3>Kudos ({{ fic.kudos|length }})</h3>
-                {% set total_users = fic.kudos|length %} {% if total_users > 2
-                %} {% set displayed_users = fic.kudos[:2] %} {{
-                displayed_users|join(', ') }} and {{ total_users - 2 }} others
-                have given kudos! {% elif total_users == 2 %} {{ fic.kudos[0] }}
-                and {{ fic.kudos[1] }} have given kudos! {% elif total_users ==
-                1 %} {{ fic.kudos[0] }} has given kudos! {% else %}
+                <h3>Kudos ({{ kudos|length }})</h3>
+                {% if kudos|length > 0 %} {% if kudos|length > 2 %} {{ kudos[:2]
+                | join(', ') }} and {{ kudos|length - 2 }} others have given
+                kudos! {% elif kudos|length == 2 %} {{ kudos[0] }} and {{
+                kudos[1] }} have given kudos! {% elif kudos|length == 1 %} {{
+                kudos[0] }} has given kudos! {% endif %} {% else %}
                 <p>No kudos yet.</p>
                 {% endif %}
+
                 <form
                     id="name"
                     method="POST"

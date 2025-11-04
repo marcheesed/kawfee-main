@@ -4,6 +4,11 @@
         <meta charset="UTF-8" />
         <title>User IP Logs</title>
         <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
+        <link
             rel="stylesheet"
             href="{{ url_for('static', filename='style.css') }}"
         />
@@ -122,6 +127,16 @@
                 {% else %}
                 <p>No logs available.</p>
                 {% endif %}
+                <div class="pagination">
+                    {% if current_page > 1 %}
+                    <a href="{{ url_for('all_logs', page=current_page - 1) }}"
+                        >Previous</a
+                    >
+                    <a href="{{ url_for('all_logs', page=current_page + 1) }}"
+                        >Next</a
+                    >
+                    {% endif %}
+                </div>
             </div>
 
             <div class="site-footer">
@@ -134,5 +149,13 @@
             </div>
         </div>
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
+
+        <style>
+            .pagination {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 20px;
+            }
+        </style>
     </body>
 </html>
