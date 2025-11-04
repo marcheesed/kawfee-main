@@ -924,8 +924,9 @@ def edit_profile():
         abort(404)
 
     if request.method == "POST":
-        # Get form data
-        new_username = request.form.get("username").strip()
+        # Get form data safely
+        username_input = request.form.get("username")
+        new_username = username_input.strip() if username_input else old_username
         new_bio_raw = request.form.get("bio", "")
         pfp_file = request.files.get("pfp")
         new_custom_css = request.form.get("custom_css")
