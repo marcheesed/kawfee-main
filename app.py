@@ -641,7 +641,7 @@ def filter_by_single_tag(tag):
 
 ## above is actually refactored
 
-ALLOWED_USERNAMES = ["user1", "user2", "user3"]  # your list of allowed usernames
+ALLOWED_USERNAMES = ["cammy", "offiz", "seal", "moonajauna", "fizzypoppeaches", "yuri", "chimerathing", "yuri"]  # your list of allowed usernames
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -2320,4 +2320,4 @@ def nl2br_filter(s):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host= '0.0.0.0', port=5000)
