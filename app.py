@@ -1568,10 +1568,15 @@ def delete_comment(fid, comment_index):
     current_user = session.get("username")
     is_admin = session.get("is_admin", False)
 
-    # Check permissions
-    if comment["name"] != current_user and not is_admin:
-        conn.close()
-        abort(403)
+    # Check permissions: admins can delete any, users only their own
+    if is_admin:
+        # Admins are allowed to delete any comment
+        pass
+    else:
+        # Regular users can only delete their own comments
+        if comment["name"] != current_user:
+            conn.close()
+            abort(403)
 
     # Remove comment
     comments.pop(comment_index)
@@ -1620,11 +1625,32 @@ def admin_panel():
             save_banned_ip(ip_to_ban)
             return f"IP {ip_to_ban} has been banned.", 200
 
-    # Fetch all users from DB
+    # Fetch all users
     users = get_all_users()
-    user_ips = {u["username"]: u.get("ip", "Unknown") for u in users}
 
-    # Fetch fanfics (assumes get_fanfics() is DB-based)
+    # Fetch latest IP from ip_logs for each user:
+    # SQL: get the most recent log per user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT il.ip, il.username
+        FROM ip_logs il
+        JOIN (
+            SELECT username, MAX(timestamp) as max_time
+            FROM ip_logs
+            GROUP BY username
+        ) latest_log ON il.username = latest_log.username AND il.timestamp = latest_log.max_time
+    """)
+    latest_logs = {row["username"]: row["ip"] for row in cursor.fetchall()}
+
+    # Close connection
+    conn.close()
+
+    # Prepare user_ips dict for template
+    user_ips = {u["username"]: latest_logs.get(u["username"], "Unknown") for u in users}
+
+    # Fetch fanfics, if applicable
     fanfics = get_fanfics()
 
     return render_template(
@@ -1637,6 +1663,7 @@ def admin_panel():
         logged_in=True,
         user_ips=user_ips,
         users=users,
+        user_logs=None,  # if you want to include logs, fetch & pass separately
     )
 
 
@@ -2019,28 +2046,6 @@ def blog():
                 "formatted_timestamp": formatted_time,
             }
         )
-
-    # Sort posts by timestamp descending
-    posts.sort(key=lambda x: x["timestamp"], reverse=True)
-    print(f"Number of posts in list: {len(posts)}")
-
-    # Pagination
-    page = int(request.args.get("page", 1))
-    per_page = 6
-    total_posts = len(posts)
-    total_pages = (total_posts + per_page - 1) // per_page
-    start = (page - 1) * per_page
-    end = start + per_page
-    display_posts = posts[start:end]
-
-    return render_template(
-        "blog.html",
-        posts=display_posts,
-        is_admin=is_admin(),
-        logged_in=logged_in(),
-        current_page=page,
-        total_pages=total_pages,
-    )
 
     # Sort posts by timestamp descending
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
