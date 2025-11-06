@@ -128,10 +128,11 @@
                 <p>No logs available.</p>
                 {% endif %}
                 <div class="pagination">
-                    {% if current_page > 1 %}
+                    {% if has_prev %}
                     <a href="{{ url_for('all_logs', page=current_page - 1) }}"
                         >Previous</a
                     >
+                    {% endif %} {% if has_next %}
                     <a href="{{ url_for('all_logs', page=current_page + 1) }}"
                         >Next</a
                     >

@@ -2353,7 +2353,6 @@ def show_logs():
 
 @app.route("/admin/all_logs")
 def all_logs():
-    # Pagination parameters
     per_page = 20
     page = request.args.get("page", 1, type=int)
     offset = (page - 1) * per_page
@@ -2361,10 +2360,10 @@ def all_logs():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch total count to calculate total pages
+    # Fetch total count
     cursor.execute("SELECT COUNT(*) FROM ip_logs")
     total_count = cursor.fetchone()[0]
-    total_pages = (total_count + per_page - 1) // per_page  # ceiling division
+    total_pages = (total_count + per_page - 1) // per_page
 
     # Fetch logs for current page
     cursor.execute(
@@ -2386,11 +2385,17 @@ def all_logs():
 
     conn.close()
 
+    # Determine if there are next/previous pages
+    has_prev = page > 1
+    has_next = page < total_pages
+
     return render_template(
         "admin/all_logs.html",
         logs=all_logs,
         current_page=page,
         total_pages=total_pages,
+        has_prev=has_prev,
+        has_next=has_next,
         is_admin=is_admin(),
         logged_in=logged_in(),
     )
