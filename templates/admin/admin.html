@@ -106,6 +106,7 @@
                 <ul>
                     {% for user in users %}
                     <div style="display:flex; align-items:center; gap:10px; padding-bottom:15px;">
+                        <!-- Delete User form -->
                         <form
                             action="{{ url_for('delete_user', username=user['username']) }}"
                             method="post"
@@ -114,13 +115,14 @@
                             <button type="submit">Delete User</button>
                         </form>
 
-
+                        <!-- User info and IP -->
                         <li style="margin-left: 20px;">
                             {{ user['username'] }} - {% if user['is_admin'] %}Admin{% else %}User{% endif %}
                             {% if user['banned'] %}
                                 <span style="color:red;">[BANNED]</span>
                             {% endif %}
                             | IP: {{ user_ips.get(user['username'], 'Unknown') }}
+
                             <!-- Ban IP form -->
                             <form
                                 action="{{ url_for('ban_ip') }}"
