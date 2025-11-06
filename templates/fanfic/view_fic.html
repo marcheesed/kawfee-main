@@ -112,18 +112,16 @@
                 <p>Age Rating: {{ fic["age_rating"] }}</p>
                 <div id="chapterDisplay">
                     <div class="chapter-content">
-                        {% if chapters %}
-                        <h2>{{ chapters[0].title }}</h2>
-                        <div class="chapter-content">
-                            <pre class="fic-text" style="white-space: pre-wrap">
-                        {{ chapters[0].content | safe }}
-                        </pre
-                            >
-                        </div>
-                        {% else %}
-                        <p>No chapters available.</p>
-                        {% endif %}
+                        {% if chapters %} {% for chapter in chapters %}
+                        <h2>{{ chapter.title }}</h2>
+                        <pre class="fic-text" style="white-space: pre-wrap">
+                        {{ chapter.content | safe }}
+                        </pre>
+                        {% endfor %}
                     </div>
+                    {% else %}
+                    <p>No chapters available.</p>
+                    {% endif %}
                 </div>
                 <h3>Tags</h3>
                 <p>
@@ -217,14 +215,10 @@
             </div>
             <div class="footer">
                 <p>
-                    <a href="{{ url_for('index') }}">Index</a>
-                    {% if session['username'] == fic.owner %} ---
-                    <a href="{{ url_for('edit_fic', fid=fic.id) }}"
-                        >Edit this Fanfic</a
-                    >
-                    {% endif %} {% if is_admin %} ---
+                    <a href="{{ url_for('index') }}">Index</a> ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% endif %} {% if logged_in %}--
+                    {% if logged_in %}---
+
                     <a href="{{ url_for('logout') }}">Logout</a> {% endif %}
                 </p>
             </div>

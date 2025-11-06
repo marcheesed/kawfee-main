@@ -55,7 +55,7 @@
       {% endif %}
     </div>
     <div class="container">
-      <h1>
+      <h1 id="profile-username">
         {% if logged_in %} Your {% else %} {{ user.username }}'s {% endif %} Profile
       </h1>
       <div class="profile-box">
@@ -85,7 +85,7 @@
 
           <!-- Custom CSS -->
           <label for="custom_css">Custom CSS:</label>
-          <textarea style="white-space: pre-wrap" name="custom_css" id="custom_css" rows="6" cols="30">{{ user.custom_css or '' }}</textarea>
+          <textarea style="white-space: pre-wrap" name="custom_css" id="custom_css" rows="10" cols="30">{{ user.custom_css or '' }}</textarea>
 
           <!-- Bio -->
           <label for="bio">Bio:</label>

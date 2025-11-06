@@ -24,7 +24,7 @@ import time
 
 
 def get_db_connection():
-    conn = sqlite3.connect("data.db", check_same_thread=False)
+    conn = sqlite3.connect("new.db", check_same_thread=False)
     conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
     conn.row_factory = sqlite3.Row
     return conn
@@ -136,6 +136,7 @@ ALLOWED_TAGS = [
     "span",
     "img",
     "style",
+    "center",
 ]
 
 ALLOWED_ATTRIBUTES = {
@@ -151,6 +152,7 @@ ALLOWED_STYLES = [
     "background-color",
     "border-radius",
     "font-weight",
+    "text-align",
     "font-style",
     "text-decoration",
     "background-image",
@@ -491,12 +493,20 @@ def index():
     # Calculate top tags
     tag_counts = {}
     for f in fanfics:
-        for tag in f.get("tags", []):
-            if isinstance(tag, str):
-                try:
-                    tag = json.loads(tag)
-                except:
-                    pass
+        tags = f.get("tags", [])
+        # Ensure tags is a list
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except:
+                tags = [tags]
+        elif not isinstance(tags, list):
+            tags = [tags]
+
+        # Count each tag (must be string)
+        for tag in tags:
+            if not isinstance(tag, str):
+                continue
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
     top_tags = [
@@ -539,8 +549,15 @@ def filter_by_single_tag(tag):
     fanfics_list = get_fanfics()
     blog_posts = get_blog_posts()
 
-    # Fetch site info
-    site_info = get_site_info()
+    # Fetch site info and convert to dict if needed
+    site_info_row = get_site_info()
+    if isinstance(site_info_row, dict):
+        site_info = site_info_row
+    elif hasattr(site_info_row, "_asdict"):  # for sqlite3.Row
+        site_info = dict(site_info_row)
+    else:
+        site_info = dict(site_info_row)  # fallback
+
     print("Fetched site_info:", site_info)
 
     # Convert blog posts to desired format
@@ -584,9 +601,24 @@ def filter_by_single_tag(tag):
                 except:
                     tags_data = []
         for t in tags_data:
-            all_tags.add(t)
+            # Convert list to string to avoid unhashable errors
+            if isinstance(t, list):
+                t_str = json.dumps(t, sort_keys=True)
+            elif isinstance(t, str):
+                try:
+                    t_parsed = json.loads(t)
+                    if isinstance(t_parsed, list):
+                        t_str = json.dumps(t_parsed, sort_keys=True)
+                    else:
+                        t_str = t
+                except:
+                    t_str = t
+            else:
+                t_str = str(t)
+            all_tags.add(t_str)
 
-    # Save tags for template
+    # Initialize data dictionary
+    data = {}
     data["tags"] = list(all_tags)
 
     # Filter fanfics by the specified tag
@@ -600,12 +632,21 @@ def filter_by_single_tag(tag):
     tag_counts = {}
     for f in fanfics_list:
         for t in f.get("tags", []):
-            if isinstance(t, str):
+            # Handle t being list or string
+            if isinstance(t, list):
+                t_parsed = json.dumps(t, sort_keys=True)
+            elif isinstance(t, str):
                 try:
-                    t = json.loads(t)
+                    t_parsed = json.loads(t)
+                    if isinstance(t_parsed, list):
+                        t_parsed = json.dumps(t_parsed, sort_keys=True)
+                    else:
+                        t_parsed = t
                 except:
-                    pass
-            tag_counts[t] = tag_counts.get(t, 0) + 1
+                    t_parsed = t
+            else:
+                t_parsed = str(t)
+            tag_counts[t_parsed] = tag_counts.get(t_parsed, 0) + 1
 
     # Get top 5 tags
     top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -641,7 +682,16 @@ def filter_by_single_tag(tag):
 
 ## above is actually refactored
 
-ALLOWED_USERNAMES = ["cammy", "offiz", "seal", "moonajauna", "fizzypoppeaches", "yuri", "chimerathing", "yuri"]  # your list of allowed usernames
+ALLOWED_USERNAMES = [
+    "cammy",
+    "offiz",
+    "seal",
+    "moonajauna",
+    "fizzypoppeaches",
+    "yuri",
+    "chimerathing",
+    "yuri",
+]  # your list of allowed usernames
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -1155,7 +1205,7 @@ def view_fic(fid):
     else:
         kudos_list = []
 
-    # You can process kudos as needed, e.g., deduplicate
+    # Deduplicate kudos
     kudos = list(set(kudos_list))
 
     # Fetch chapters
@@ -1181,35 +1231,23 @@ def view_fic(fid):
             ).strip()
             chapter["content"] = re.sub(r"\n\s*\n+", "\n\n", chapter["content"])
 
+    # Extract tag names
     tags = [row["name"] for row in tags_rows]
 
-    # Pass kudos to template
-    # You can pass the list directly, or create a string for display
-    kudos_display = kudos
+    # Attach tags to fanfic dict for template access
+    fanfic["tags"] = tags
 
-    # Helper functions
-    def logged_in():
-        return "username" in session
+    # Check user session and get admin status safely
+    user = get_user(session.get("username", ""))
+    is_admin = user.get("is_admin", False) if user else False
 
-    log_ip(username=session.get("username"), page=request.path)
-
-    is_admin = False
-    username = session.get("username")
-    if username:
-        user = get_user(username)
-        if user and user.get("is_admin"):
-            is_admin = True
-
-    # Debug
-    print("Kudos:", kudos_display)
-
+    # Pass to template
     return render_template(
         "fanfic/view_fic.html",
         fic=fanfic,
         chapters=chapters,
-        tags=tags,
-        kudos=kudos_display,
-        logged_in=logged_in(),
+        kudos=kudos,
+        logged_in=("username" in session),
         is_admin=is_admin,
     )
 
@@ -1267,10 +1305,15 @@ def edit_fic(fid):
 
     # Handle POST request for updating fanfic
     if request.method == "POST":
-        selected_tags = request.form.getlist("tags")
+        # Parse tags from the form's hidden input (comma-separated string)
+        tags_str = request.form.get("tags", "")
+        selected_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+
+        # Handle optional new tag input
         new_tag = request.form.get("new_tag", "").strip()
         if new_tag:
             selected_tags.append(new_tag)
+
         # Deduplicate tags
         updated_tags = list(set(selected_tags))
 
@@ -1301,16 +1344,20 @@ def edit_fic(fid):
         # Update chapters: delete existing and insert new
         conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fid,))
         for index, chapter in enumerate(chapters):
+            # Remove 'id' from insert, since it's autoincrement
             conn.execute(
-                "INSERT INTO chapters (fanfic_id, id, title, content) VALUES (?, ?, ?, ?)",
-                (fid, index + 1, chapter["title"], chapter["content"]),
+                "INSERT INTO chapters (fanfic_id, title, content) VALUES (?, ?, ?)",
+                (fid, chapter["title"], chapter["content"]),
             )
 
-        # Update tags: delete old associations and add new
+        # Update tags: clear old associations
         conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fid,))
+
+        # Insert tags and create associations
         for tag in updated_tags:
-            # Insert tag if not exists
+            # Insert new tag if it doesn't exist
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+            # Retrieve the tag id
             tag_id_row = conn.execute(
                 "SELECT id FROM tags WHERE name = ?", (tag,)
             ).fetchone()
@@ -1320,13 +1367,14 @@ def edit_fic(fid):
                     (fid, tag_id_row["id"]),
                 )
 
-        # Save comments and kudos back (assuming you want to keep existing comments/kudos
+        # Save comments and kudos if needed (not shown here, keep your logic)
 
         conn.commit()
         conn.close()
         return redirect(url_for("view_fic", fid=fid))
 
     conn.close()
+
     # Render edit form with current data
     return render_template(
         "fanfic/edit_fic.html",
@@ -1909,7 +1957,7 @@ def blog():
 
     # Fetch all blog posts with authors
     cursor.execute("""
-        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name
+        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name, bp.author
         FROM blog_posts bp
         LEFT JOIN users u ON bp.author = u.username
     """)
@@ -1919,7 +1967,17 @@ def blog():
     # Prepare posts list
     posts = []
     for row in posts_rows:
-        author_display = row["display_name"] if row["display_name"] else row["author"]
+        # Safely get 'display_name'
+        display_name = (
+            row["display_name"]
+            if "display_name" in row and row["display_name"]
+            else None
+        )
+        # Safely get 'author'
+        author_value = row["author"] if "author" in row else ""
+
+        # Fallback for author display
+        author_display = display_name if display_name else author_value
         timestamp_str = row["timestamp"]
         try:
             formatted_time = datetime.fromisoformat(timestamp_str).strftime(
@@ -1961,6 +2019,28 @@ def blog():
         total_pages=total_pages,
     )
 
+    # Sort posts by timestamp descending
+    posts.sort(key=lambda x: x["timestamp"], reverse=True)
+    print(f"Number of posts in list: {len(posts)}")
+
+    # Pagination
+    page = int(request.args.get("page", 1))
+    per_page = 6
+    total_posts = len(posts)
+    total_pages = (total_posts + per_page - 1) // per_page
+    start = (page - 1) * per_page
+    end = start + per_page
+    display_posts = posts[start:end]
+
+    return render_template(
+        "blog.html",
+        posts=display_posts,
+        is_admin=is_admin(),
+        logged_in=logged_in(),
+        current_page=page,
+        total_pages=total_pages,
+    )
+
 
 @app.route("/blog/<post_id>")
 def view_blog_post(post_id):
@@ -1971,11 +2051,11 @@ def view_blog_post(post_id):
     # Fetch the post along with author display name
     cursor.execute(
         """
-        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name
+        SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name, bp.author
         FROM blog_posts bp
         LEFT JOIN users u ON bp.author = u.username
         WHERE bp.id = ?
-    """,
+        """,
         (post_id,),
     )
     row = cursor.fetchone()
@@ -1984,13 +2064,23 @@ def view_blog_post(post_id):
     if not row:
         abort(404)
 
+    # Safely get display_name; fallback to 'author' if missing
+    display_name = (
+        row["display_name"]
+        if "display_name" in row.keys() and row["display_name"]
+        else None
+    )
+    author_value = row["author"] if "author" in row.keys() else ""
+
+    author_display = display_name if display_name else author_value
+
     # Prepare post data
     post = {
         "id": row["id"],
         "title": row["title"],
         "content": row["content"],
         "timestamp": row["timestamp"],
-        "author": row["display_name"] if row["display_name"] else row["author"],
+        "author": author_display,
     }
 
     # Format timestamp
@@ -2320,4 +2410,4 @@ def nl2br_filter(s):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host= '0.0.0.0', port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
