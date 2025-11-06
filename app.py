@@ -1,30 +1,31 @@
+import ast
 import json
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    session,
-    jsonify,
-    abort,
-)
-from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import re
-from jinja2 import pass_environment
-import bleach
-from datetime import datetime, timedelta
-import bcrypt
-from typing import Any
-import ast
 import sqlite3
 import time
+from datetime import datetime, timedelta
+from typing import Any
+
+import bcrypt
+import bleach
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from jinja2 import pass_environment
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 
 def get_db_connection():
-    conn = sqlite3.connect("new.db", check_same_thread=False)
+    conn = sqlite3.connect("dev_data.db", check_same_thread=False)
     conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
     conn.row_factory = sqlite3.Row
     return conn
@@ -196,8 +197,19 @@ def sanitize_note_content(content):
     )
 
 
+def get_client_ip():
+    if request.headers.get("X-Forwarded-For"):
+        # X-Forwarded-For can contain multiple IPs, take the first one
+        ip = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+    elif request.headers.get("X-Real-IP"):
+        ip = request.headers.get("X-Real-IP")
+    else:
+        ip = request.remote_addr
+    return ip
+
+
 def log_ip(username=None, page=None):
-    ip = request.remote_addr
+    ip = get_client_ip()
     now = datetime.now().isoformat()
 
     conn = get_db_connection()
