@@ -208,6 +208,20 @@ def get_client_ip():
     return ip
 
 
+def update_user_ip(username):
+    ip = get_client_ip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET ip = ? WHERE username = ?",
+            (ip, username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def log_ip(username=None, page=None):
     ip = get_client_ip()
     now = datetime.now().isoformat()
@@ -692,8 +706,6 @@ def filter_by_single_tag(tag):
     )
 
 
-## above is actually refactored
-
 ALLOWED_USERNAMES = [
     "cammy",
     "offiz",
@@ -703,7 +715,7 @@ ALLOWED_USERNAMES = [
     "yuri",
     "chimerathing",
     "yuri",
-]  # your list of allowed usernames
+]
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -791,14 +803,13 @@ def login():
         if bcrypt.checkpw(password.encode("utf-8"), stored_hashed.encode("utf-8")):
             # password is correct
 
-            # get current ip
-            ip_address = request.remote_addr
+            # get current ip using get_client_ip() for accurate IP behind proxies
+            ip_address = get_client_ip()
 
             # log the ip in the audit log
             log_ip(username=session.get("username"), page=request.path)
 
             # update the user's ip in the database
-            # Assuming your user table has an 'ip' column
             conn = get_db_connection()
             conn.execute(
                 "UPDATE users SET ip = ? WHERE username = ?", (ip_address, username)
