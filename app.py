@@ -1094,11 +1094,10 @@ def submit():
 
     log_ip(username=session.get("username"), page=request.path)
 
-    # Fetch all tags for display
     conn = get_db_connection()
-    all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
 
-    # Prepare tag list
+    # Fetch all tags for display
+    all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
     all_tags = [row["name"] for row in all_tags_rows]
 
     if request.method == "POST":
@@ -1106,37 +1105,32 @@ def submit():
         max_id_row = conn.execute("SELECT MAX(id) FROM fanfics").fetchone()
         new_id = (max_id_row[0] or 0) + 1
 
-        # Collect chapters
-        chapters = []
-        pattern_title = re.compile(r"chapter_title_(\d+)")
-        for key in request.form:
-            match = pattern_title.match(key)
-            if match:
-                index = match.group(1)
-                title = request.form.get(f"chapter_title_{index}")
-                content = request.form.get(f"chapter_content_{index}")
-                if title or content:
-                    content = re.sub(r"\n+", "\n", content.strip()) if content else ""
-                    chapters.append({"title": title, "content": content})
+        # Get form data
+        # Note: 'tags' is a JSON string sent from the form
+        tags_json = request.form.get("tags", "[]")
+        try:
+            combined_tags = json.loads(tags_json)
+            # Ensure it's a list
+            if not isinstance(combined_tags, list):
+                combined_tags = []
+        except json.JSONDecodeError:
+            combined_tags = []
 
-        print("Collected chapters:", chapters)
-
-        # Get and process tags
-        selected_tags = request.form.getlist("tags")
+        # Add new_tag if provided
         new_tag = request.form.get("new_tag", "").strip()
-
-        combined_tags = list(set(selected_tags))
         if new_tag:
-            combined_tags.append(new_tag)
+            if new_tag not in combined_tags:
+                combined_tags.append(new_tag)
 
         age_rating = request.form.get("age_rating")
+        content_text = request.form.get("content")
 
-        # Insert into fanfics table (without chapters)
+        # Insert new fanfic record
         conn.execute(
             """
             INSERT INTO fanfics (
-                id, title, author, owner, fandom, comments, kudos, age_rating
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                id, title, author, owner, fandom, comments, kudos, age_rating, content
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_id,
@@ -1147,41 +1141,37 @@ def submit():
                 json.dumps([]),  # comments
                 json.dumps([]),  # kudos
                 age_rating,
+                content_text,
             ),
         )
-        conn.commit()
 
-        # Insert chapters into chapters table
-        for index, chapter in enumerate(chapters):
-            conn.execute(
-                "INSERT INTO chapters (fanfic_id, id, title, content) VALUES (?, ?, ?, ?)",
-                (new_id, index + 1, chapter["title"], chapter["content"]),
-            )
-
-        # Insert tags into tags and associate with fanfic
+        # Handle tags: insert new tags and create associations
         for tag in combined_tags:
+            print(f"Inserting or ignoring tag: {tag}")
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
-            tag_id_row = conn.execute(
+            # Fetch the tag id
+            tag_row = conn.execute(
                 "SELECT id FROM tags WHERE name = ?", (tag,)
             ).fetchone()
-            if tag_id_row:
-                tag_id = tag_id_row["id"]
+            if tag_row:
+                print(f"Associating tag '{tag}' with fanfic {new_id}")
                 conn.execute(
-                    "INSERT INTO fanfic_tags (fanfic_id, tag_id) VALUES (?, ?)",
-                    (new_id, tag_id),
+                    "INSERT OR IGNORE INTO fanfic_tags (fanfic_id, tag_id) VALUES (?, ?)",
+                    (new_id, tag_row["id"]),
                 )
 
+        # Commit all changes
         conn.commit()
         conn.close()
 
-        print("New fanfic added with chapters:", chapters)
+        print("New fanfic added with content.")
         return redirect(url_for("view_fic", fid=new_id))
 
-    # For GET, render the form
+    # For GET request, just render the form
     return render_template(
         "fanfic/submit.html",
         logged_in=True,
-        tags=all_tags,
+        tags=[],
         is_admin=is_admin(),
     )
 
@@ -1218,7 +1208,7 @@ def view_fic(fid):
             unique_comments.append(c)
     fanfic["comments"] = unique_comments
 
-    # Parse kudos (assuming stored as JSON array of usernames)
+    # Parse kudos
     kudos_json = fanfic.get("kudos")
     if kudos_json:
         try:
@@ -1231,7 +1221,7 @@ def view_fic(fid):
     # Deduplicate kudos
     kudos = list(set(kudos_list))
 
-    # Fetch chapters
+    # Fetch chapters (but dont display them)
     chapters_rows = conn.execute(
         "SELECT * FROM chapters WHERE fanfic_id = ?", (fid,)
     ).fetchall()
@@ -1242,10 +1232,9 @@ def view_fic(fid):
         (fid,),
     ).fetchall()
 
-    # Close the connection after all queries
     conn.close()
 
-    # Process chapters content
+    # Process chapters content (not used for display, but you can keep this if needed)
     chapters = [dict(c) for c in chapters_rows] if chapters_rows else []
     for chapter in chapters:
         if "content" in chapter:
@@ -1256,20 +1245,18 @@ def view_fic(fid):
 
     # Extract tag names
     tags = [row["name"] for row in tags_rows]
-
-    # Attach tags to fanfic dict for template access
     fanfic["tags"] = tags
 
-    # Check user session and get admin status safely
+    # Check user session and get admin status
     user = get_user(session.get("username", ""))
     is_admin = user.get("is_admin", False) if user else False
-
-    # Pass to template
     return render_template(
         "fanfic/view_fic.html",
-        fic=fanfic,
-        chapters=chapters,
+        fic_content=fanfic["content"],
+        # pass other variables as needed, e.g., comments, kudos, tags, etc.
+        comments=comments,
         kudos=kudos,
+        fic=fanfic,  # optional, if you need other info
         logged_in=("username" in session),
         is_admin=is_admin,
     )
@@ -1328,11 +1315,11 @@ def edit_fic(fid):
 
     # Handle POST request for updating fanfic
     if request.method == "POST":
-        # Parse tags from the form's hidden input (comma-separated string)
+        # Parse tags from form
         tags_str = request.form.get("tags", "")
         selected_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
 
-        # Handle optional new tag input
+        # Handle new tag input
         new_tag = request.form.get("new_tag", "").strip()
         if new_tag:
             selected_tags.append(new_tag)
@@ -1353,21 +1340,21 @@ def edit_fic(fid):
                     content = re.sub(r"\n+", "\n", content.strip()) if content else ""
                     chapters.append({"title": title, "content": content})
 
-        # Update main fanfic fields
+        # Update main fanfic fields including content
         conn.execute(
-            "UPDATE fanfics SET title=?, fandom=?, age_rating=? WHERE id=?",
+            "UPDATE fanfics SET title=?, fandom=?, age_rating=?, content=? WHERE id=?",
             (
                 request.form["title"],
                 request.form["fandom"],
                 request.form.get("age_rating", "13+"),
+                request.form.get("content", ""),  # <-- your story content
                 fid,
             ),
         )
 
         # Update chapters: delete existing and insert new
         conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fid,))
-        for index, chapter in enumerate(chapters):
-            # Remove 'id' from insert, since it's autoincrement
+        for chapter in chapters:
             conn.execute(
                 "INSERT INTO chapters (fanfic_id, title, content) VALUES (?, ?, ?)",
                 (fid, chapter["title"], chapter["content"]),
@@ -1378,9 +1365,7 @@ def edit_fic(fid):
 
         # Insert tags and create associations
         for tag in updated_tags:
-            # Insert new tag if it doesn't exist
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
-            # Retrieve the tag id
             tag_id_row = conn.execute(
                 "SELECT id FROM tags WHERE name = ?", (tag,)
             ).fetchone()
@@ -1390,7 +1375,8 @@ def edit_fic(fid):
                     (fid, tag_id_row["id"]),
                 )
 
-        # Save comments and kudos if needed (not shown here, keep your logic)
+        # Save comments and kudos if needed (your logic)
+        # (assuming you handle comments/kudos elsewhere or add here)
 
         conn.commit()
         conn.close()
@@ -1398,7 +1384,7 @@ def edit_fic(fid):
 
     conn.close()
 
-    # Render edit form with current data
+    # Render edit form with current data, including content
     return render_template(
         "fanfic/edit_fic.html",
         fic={
@@ -1411,6 +1397,7 @@ def edit_fic(fid):
             "owner": fanfic_row["owner"],
             "tags": current_tags,
             "chapters": chapters,
+            "content": fanfic_row["content"],  # safe to access directly
         },
         all_tags=all_tags,
         logged_in=logged_in(),
@@ -1465,18 +1452,41 @@ def add_kudo(fid):
 
 
 def user_exists(username):
-    return username in data["users"]
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT 1 FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    conn.close()
+    return user is not None
 
 
-def linkify_mentions(content):
+def user_exists_in_comments(fanfic_id, username):
+    conn = get_db_connection()
+    fanfic_row = conn.execute(
+        "SELECT comments FROM fanfics WHERE id = ?", (fanfic_id,)
+    ).fetchone()
+    conn.close()
+    if not fanfic_row or not fanfic_row["comments"]:
+        return False
+    try:
+        comments = json.loads(fanfic_row["comments"])
+    except json.JSONDecodeError:
+        return False
+    for comment in comments:
+        if comment.get("name") == username:
+            return True
+    return False
+
+
+def linkify_mentions(content, fanfic_id):
     def replace_mention(match):
         username = match.group(1)
-        if user_exists(username):
+        if user_exists_in_comments(fanfic_id, username):
             return f'<a href="{url_for("profile", username=username)}">@{username}</a>'
         else:
             return f"@{username}"
 
-    pattern = r"@(\w+)"  #  adjust pattern with special chars
+    pattern = r"@(\w+)"
     return re.sub(pattern, replace_mention, content)
 
 
@@ -1506,7 +1516,7 @@ def add_comment(fid):
 
     # Prepare new comment
     content = request.form["content"]
-    content_with_links = linkify_mentions(content)
+    content_with_links = linkify_mentions(content, fid)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username = session["username"]
     user = get_user(username)  # assuming you have this function

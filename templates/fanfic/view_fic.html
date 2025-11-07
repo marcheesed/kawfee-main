@@ -28,7 +28,7 @@
                         align-items: center;
                     "
                 >
-                    <!-- Sun icon (light mode) -->
+                    <!-- Sun icon -->
                     <svg
                         id="icon-sun"
                         width="24"
@@ -74,7 +74,7 @@
                             ></line>
                         </g>
                     </svg>
-                    <!-- Moon icon (dark mode) -->
+                    <!-- Moon icon -->
                     <svg
                         id="icon-moon"
                         width="24"
@@ -107,28 +107,29 @@
             <div class="container-1">
                 <h1>{{ fic.title }}</h1>
                 <p>by {{ fic.owner }}</p>
-                <!-- other details -->
+                <!-- Display the main content of the fic -->
+
                 <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
                 <p>Age Rating: {{ fic["age_rating"] }}</p>
-                <div id="chapterDisplay">
-                    <div class="chapter-content">
-                        {% if chapters %} {% for chapter in chapters %}
-                        <h2>{{ chapter.title }}</h2>
-                        <pre class="fic-text" style="white-space: pre-wrap">
-                        {{ chapter.content | safe }}
-                        </pre>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <p>No chapters available.</p>
-                    {% endif %}
+
+                <div class="fic-main-content">
+                    <pre
+                        class="fic-text"
+                        style="white-space: pre-wrap; padding-top: 20px"
+                    >
+{{ fic.content | safe }}
+            </pre
+                    >
                 </div>
+                <!-- Remove chapters display section entirely -->
+
                 <h3>Tags</h3>
                 <p>
                     {% for tag in fic.tags %}
                     <span>{{ tag }}</span>
                     {% endfor %}
                 </p>
+
                 <h3>Kudos ({{ kudos|length }})</h3>
                 {% if kudos|length > 0 %} {% if kudos|length > 2 %} {{ kudos[:2]
                 | join(', ') }} and {{ kudos|length - 2 }} others have given
@@ -147,10 +148,10 @@
                     <br />
                     <button type="submit">Give Kudos</button>
                 </form>
+
                 <h3>Comments</h3>
                 <div>
-                    {% for comment in fic.comments %} {% set index = loop.index0
-                    %}
+                    {% for comment in fic.comments %}
                     <div
                         style="
                             display: flex;
@@ -161,7 +162,6 @@
                         "
                     >
                         <div style="display: flex; align-items: center">
-                            <!-- User profile picture -->
                             <img
                                 src="{{ url_for('static', filename=comment['pfp']) if comment['pfp'] else url_for('static', filename='images/default_pfp.png') }}"
                                 alt="Profile Picture"
@@ -178,10 +178,9 @@
                         <div>
                             {% if is_admin or session.username == comment.name
                             %}
-                            <!-- Delete button -->
                             <form
                                 method="POST"
-                                action="{{ url_for('delete_comment', fid=fic.id, comment_index=index) }}"
+                                action="{{ url_for('delete_comment', fid=fic.id, comment_index=loop.index0) }}"
                                 style="display: inline"
                             >
                                 <button type="submit">Delete</button>
@@ -217,9 +216,13 @@
                 <p>
                     <a href="{{ url_for('index') }}">Index</a> ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
-                    {% if logged_in %}---
-
-                    <a href="{{ url_for('logout') }}">Logout</a> {% endif %}
+                    {% if session['username'] == fic.owner %} ---
+                    <a href="{{ url_for('edit_fic', fid=fic.id) }}"
+                        >Edit this Fanfic</a
+                    >
+                    {% endif %} {% if logged_in %} ---
+                    <a href="{{ url_for('logout') }}">Logout</a>
+                    {% endif %}
                 </p>
             </div>
         </div>

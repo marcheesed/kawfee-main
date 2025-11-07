@@ -3,7 +3,11 @@
     <head>
         <meta charset="UTF-8" />
         <title>Submit Fanfic</title>
-        <link rel="icon" href="{{ url_for('static', filename='favicon.webp') }}" type="image/x-icon" />
+        <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.webp') }}"
+            type="image/x-icon"
+        />
         <link
             rel="stylesheet"
             href="{{ url_for('static', filename='style.css') }}"
@@ -100,11 +104,14 @@
                 {% endif %}
             </div>
             <div class="container-2">
-
                 <h1>Submit a New Fanfic</h1>
                 <br />
                 <div class="submit-card">
                     <form method="POST" id="fanfic-form">
+                        <!-- Hidden input to store tags as JSON -->
+                        <input type="hidden" name="tags" id="tags-hidden" />
+
+                        <!-- Your existing inputs -->
                         <div class="submit-inputs">
                             <div class="submit-title">
                                 <label>Title</label><br />
@@ -114,15 +121,9 @@
                                 <label>Fandom</label><br />
                                 <input type="text" name="fandom" required />
                             </div>
-                            <div class="submit-title">
-                                <label>Chapter Title</label><br />
-                                <input
-                                    type="text"
-                                    name="chapter_title"
-                                    required
-                                />
-                            </div>
                         </div>
+
+                        <!-- Content textarea -->
                         <div class="submit-content">
                             <label>Content</label><br />
                             <textarea
@@ -131,7 +132,8 @@
                                 required
                             ></textarea>
                         </div>
-                        <!-- Tag system -->
+
+                        <!-- Tag input system -->
                         <div
                             class="tags-input-container"
                             style="margin-top: 20px"
@@ -143,8 +145,14 @@
                                 placeholder="Type tags and press Enter or comma"
                                 autocomplete="off"
                             />
-                        <br>
-                        <br />
+                            <!-- Container for displaying added tags -->
+                            <div
+                                id="tags-container"
+                                style="margin-top: 10px; min-height: 30px"
+                            ></div>
+                        </div>
+
+                        <!-- Age rating -->
                         <label for="age_rating" style="margin-top: 20px"
                             >Age Rating:</label
                         >
@@ -154,7 +162,8 @@
                             <option value="16+">16+</option>
                             <option value="13+">13+</option>
                         </select>
-                        <br /><br />
+
+                        <!-- Submit button -->
                         <div class="foot" style="margin-top: 20px">
                             <button type="submit">Submit</button>
                         </div>

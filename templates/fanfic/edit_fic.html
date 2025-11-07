@@ -106,22 +106,9 @@
             <!-- Handle empty or present chapters, defaulting to first chapter if exists -->
             {% set first_chapter = chapters[0] if chapters and chapters|length > 0 else {'title': '', 'content': ''} %}
 
-            <label>Chapter Title</label><br />
-            <input
-                type="text"
-                name="chapter_title"
-                value="{{ first_chapter.title }}"
-                required
-            /><br />
 
             <label>Content</label><br />
-            <textarea
-                style="white-space: pre-wrap"
-                name="chapter_content"
-                id="edit-content"
-                rows="10"
-                required
-            >{{ first_chapter.content | safe }}</textarea>
+           <textarea name="content" rows="10">{{ fic.content }}</textarea>
 
             <!-- Tags section -->
             <div class="submit-tags">
@@ -178,7 +165,7 @@
 
 <script>
 // Initialize tags array with current tags as a plain comma-separated string
-const initialTags = {{ fic.tags | default('') }}.split(',').map(t => t.trim()).filter(t => t);
+const initialTags = {{ fic.tags | tojson }};
 let tags = [...initialTags];
 
 const tagsInput = document.getElementById("tags-input");
