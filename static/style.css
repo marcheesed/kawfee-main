@@ -297,3 +297,24 @@ hr {
 .notes-card h3 {
     margin: 0;
 }
+
+table {
+    width: 100%;
+    border: 0;
+}
+
+th {
+    border: solid 1px;
+    background-color: var(--subheading-color);
+    color: var(--card-bg);
+    border-radius: 5px;
+    padding: 2px;
+}
+
+td {
+    border: dashed 1px;
+    background-color: var(--card-bg);
+    border-radius: 5px;
+    padding: 5px;
+    color: var(--text-color);
+}
