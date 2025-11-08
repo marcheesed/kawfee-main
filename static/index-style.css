@@ -173,9 +173,8 @@ form {
 }
 
 input[type="text"],
-input[type="password"],
 textarea {
-    width: 100%;
+    width: 63%;
     padding: 0.6em;
     margin-top: 0.2em;
     margin-bottom: 0.8em;
