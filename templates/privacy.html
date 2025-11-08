@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset="UTF-8" />
-        <title>IP Logs</title>
+        <title>Privacy Policy</title>
         <link
             rel="icon"
             href="{{ url_for('static', filename='favicon.webp') }}"
@@ -93,8 +93,7 @@
                 <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
-                        >{{ session.get('username', 'No username in session')
-                        }}</a
+                        >{{ session['username'] }}</a
                     >
                 </p>
                 {% else %}
@@ -105,27 +104,27 @@
                 {% endif %}
             </div>
             <div class="container-1">
-                <h1>All Users</h1>
-                <br />
-                <ul>
-                    {% for username in users %}
-                    <li>
-                        {{ username }} -
-                        <a href="{{ url_for('user_logs', username=username) }}"
-                            >View Logs</a
-                        >
-                    </li>
-                    {% endfor %}
-                </ul>
+                <h1>Privacy Policy</h1>
+                <p>This page is to be expanded in the future!</p>
+                <p>
+                    As of currently, Kawfee.net will only collect IP addresses
+                    and site cookies for visitors and users. This is to ensure a
+                    safe journey on our site along with for administrative
+                    reasons.
+                    <br />
+                    The data collected will be used to improve the website's
+                    performance and user experience, and is never shared or sold
+                    to third parties.
+                </p>
             </div>
 
             <div class="site-footer">
                 <p>
                     <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                    %} --- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                    %} ---
-                    <a href="{{ url_for('all_logs') }}">View All Logs</a> {% if
-                    is_admin %} ---
+                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                    %} {% if is_owner %} ---
+                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
+                    endif %} {% if is_admin %} ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
                     {% endif %}
                 </p>

@@ -108,8 +108,27 @@
                 <form method="POST">
                     <label>Username</label><br />
                     <input type="text" name="username" required /><br />
+
                     <label>Password</label><br />
                     <input type="password" name="password" required /><br />
+
+                    <label>
+                        <input type="checkbox" name="agree" required />
+                        I have read and acknowledged the
+                        <a href="{{ url_for('tos') }}"
+                            >Terms of Service</a
+                        > </label
+                    ><br />
+
+                    <label>
+                        <input type="checkbox" name="agree" required />
+                        I have read and acknowledged the
+                        <a href="{{ url_for('privacy') }}"
+                            >Privacy Policy</a
+                        > </label
+                    ><br />
+                    <br />
+
                     <button type="submit">Register</button>
                 </form>
             </div>

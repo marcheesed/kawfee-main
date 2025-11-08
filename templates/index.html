@@ -205,6 +205,42 @@
                   </div>
 </div>
         </div>
+        {% if show_policy_popup %}
+        <script>
+            if ({{ show_policy_popup|tojson }}) {
+                if (confirm("The privacy policy has been updated. Do you accept?")) {
+                    // User clicked OK, send AJAX to update version
+                    fetch('/accept_changes', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    }).then(response => {
+                        if (response.ok) {
+                            // Refresh or hide popup
+                            location.reload();
+                        } else {
+                            alert('Error updating privacy policy.');
+                        }
+                    });
+                }
+            }
+        </script>
+        {% endif %}
+
         <script src="{{ url_for('static', filename='theme.js') }}"></script>
+
+        <!-- Modal container -->
+        <div id="privacyModal" class="modal" style="display:none">
+          <div class="modal-content">
+            <h3 style="margin:0; margin-top: 10px">TOS or Privacy Policy Updated</h3>
+            <p>Our <a href="{{ url_for('privacy') }}">Privacy Policy</a> or our <a href="{{ url_for('tos') }}">Terms of Service</a> have been updated. This is a pop-up to make you aware of these changes,
+                and to encourage you to review them carefully. Do you accept?
+            </p>
+            <button id="acceptBtn">Accept</button>
+            <button id="declineBtn">Decline</button>
+          </div>
+        </div>
     </body>
 </html>

@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset="UTF-8" />
-        <title>IP Logs</title>
+        <title>Terms of Service</title>
         <link
             rel="icon"
             href="{{ url_for('static', filename='favicon.webp') }}"
@@ -93,8 +93,7 @@
                 <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
-                        >{{ session.get('username', 'No username in session')
-                        }}</a
+                        >{{ session['username'] }}</a
                     >
                 </p>
                 {% else %}
@@ -105,27 +104,26 @@
                 {% endif %}
             </div>
             <div class="container-1">
-                <h1>All Users</h1>
-                <br />
-                <ul>
-                    {% for username in users %}
-                    <li>
-                        {{ username }} -
-                        <a href="{{ url_for('user_logs', username=username) }}"
-                            >View Logs</a
-                        >
-                    </li>
-                    {% endfor %}
-                </ul>
+                <h1>Terms of Service</h1>
+                <p>
+                    Welcome to our Terms of Service page! Please ensure that you
+                    read this carefully before registering for an account, as it
+                    outlines the rules and regulations that govern your use of
+                    our website.
+                </p>
+                <p>
+                    While we are in closed beta testing, this page is an extreme
+                    work in progress and we ask that you be patient with us!
+                </p>
             </div>
 
             <div class="site-footer">
                 <p>
                     <a href="{{ url_for('index') }}">Index</a> {% if logged_in
-                    %} --- <a href="{{ url_for('logout') }}">Logout</a> {% endif
-                    %} ---
-                    <a href="{{ url_for('all_logs') }}">View All Logs</a> {% if
-                    is_admin %} ---
+                    %}-- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                    %} {% if is_owner %} ---
+                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
+                    endif %} {% if is_admin %} ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
                     {% endif %}
                 </p>

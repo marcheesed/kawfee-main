@@ -124,6 +124,9 @@ app.secret_key = "your_secret_key"
 
 os.makedirs(os.path.join(app.static_folder, "pfps"), exist_ok=True)
 
+# remember to update when policy updates
+CURRENT_POLICY_VERSION = 2
+
 ALLOWED_TAGS = [
     "b",
     "i",
@@ -407,6 +410,23 @@ def is_logged_in():
     return "username" in session
 
 
+@app.route("/accept_changes", methods=["POST"])
+def accept_changes():
+    if "username" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    username = session["username"]
+    # Update user's privacy_policy_version to current
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE users SET privacy_policy_version = ? WHERE username = ?",
+        (CURRENT_POLICY_VERSION, username),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/")
 def index():
     # Fetch blog posts and fanfics from DB
@@ -429,6 +449,17 @@ def index():
 
     # Logging IP
     log_ip(username=session.get("username"), page=request.path)
+
+    # Fetch current user based on session
+    username = session.get("username")
+    user = None
+    if username:
+        user = get_user(username)
+
+    # Determine if popup should be shown
+    show_policy_popup = False
+    if user and user.get("privacy_policy_version", 0) < CURRENT_POLICY_VERSION:
+        show_policy_popup = True
 
     # Format latest post timestamp
     if latest_post:
@@ -565,7 +596,7 @@ def index():
         fandom=request.args.get("fandom", ""),
         is_logged_in=is_logged_in(),
         is_admin=is_admin(),
-        # other variables if needed...
+        show_policy_popup=show_policy_popup,  # <-- add this
     )
 
 
@@ -712,7 +743,7 @@ ALLOWED_USERNAMES = [
     "seal",
     "moonajauna",
     "fizzypoppeaches",
-    "yuri",
+    "toydinosaurs",
     "chimerathing",
     "yuri",
 ]
@@ -724,24 +755,24 @@ def register():
         username = request.form["username"]
         password = request.form["password"]
 
-        # Check if username is in allowed list
+        # check if username is in allowed list
         if username not in ALLOWED_USERNAMES:
             abort(403)
 
-        # Check if username exists in the database
+        # check if username exists in the database
         existing_user = get_user(username)
         if existing_user:
             abort(400)
 
-        # Hash the password
+        # hash the password
         hashed_password = bcrypt.hashpw(
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
 
-        # Get current IP
+        # get ip
         ip_address = request.remote_addr
 
-        # Prepare user data
+        # prep user data
         user_data = {
             "username": username,
             "password": hashed_password,
@@ -751,20 +782,20 @@ def register():
             "custom_css": "",
             "display_name": "",
             "ip": ip_address,
+            "privacy_policy_version": CURRENT_POLICY_VERSION,  # Track the version at registration
         }
 
-        # Save new user to database
+        # save new user to database
         create_user(user_data)
 
-        # Log the IP (optional)
+        # log ip
         log_ip(username=session.get("username"), page=request.path)
 
-        # Log the user in
+        # log user in
         session["username"] = username
 
         return redirect(url_for("index"))
 
-    # For GET, render registration form
     return render_template(
         "register.html",
         user=session.get("username"),
@@ -781,6 +812,7 @@ def login():
     user = None
     admin_status = False
     logged_in = False
+    show_policy_popup = False  # flag to show popup if needed
 
     if request.method == "POST":
         username = request.form["username"]
@@ -821,9 +853,15 @@ def login():
             session["username"] = username
             session["is_admin"] = user.get("is_admin", False)
 
+            # Check if user needs to accept latest privacy policy
+            user_policy_version = user.get("privacy_policy_version", 0)
+            if user_policy_version < CURRENT_POLICY_VERSION:
+                show_policy_popup = True
+
             print("Session 'is_admin' set to:", session["is_admin"])  # debug
 
-            return redirect(url_for("index"))
+            # Redirect to index, passing popup info if needed
+            return redirect(url_for("index", show_policy_popup=show_policy_popup))
         else:
             return "Invalid credentials"
 
@@ -834,6 +872,17 @@ def login():
         user = get_user(username)
         admin_status = session.get("is_admin", False)
 
+        # Check if user needs to accept latest privacy policy
+        user_policy_version = user.get("privacy_policy_version", 0)
+        print(
+            "User policy version:",
+            user_policy_version,
+            "Show popup:",
+            show_policy_popup,
+        )
+        if user_policy_version < CURRENT_POLICY_VERSION:
+            show_policy_popup = True
+
     return render_template(
         "login.html",
         username=username,
@@ -841,6 +890,41 @@ def login():
         logged_in=logged_in,
         user=user,
         is_admin=admin_status,
+        show_policy_popup=show_policy_popup,
+    )
+
+
+@app.route("/tos")
+def tos():
+    username = ""
+    is_admin = False
+    logged_in = False
+
+    # Check if user is logged in
+    if "username" in session:
+        username = session["username"]
+        is_admin = session.get("is_admin", False)
+        logged_in = True
+
+    return render_template(
+        "tos.html", username=username, is_admin=is_admin, logged_in=logged_in
+    )
+
+
+@app.route("/privacy")
+def privacy():
+    username = ""
+    is_admin = False
+    logged_in = False
+
+    # Check if user is logged in
+    if "username" in session:
+        username = session["username"]
+        is_admin = session.get("is_admin", False)
+        logged_in = True
+
+    return render_template(
+        "privacy.html", username=username, is_admin=is_admin, logged_in=logged_in
     )
 
 
