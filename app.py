@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.20              #
+#            KAWFEE 1.21              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -2380,7 +2380,12 @@ def about():
     else:
         current_info = {"title": "Default Title", "content": "Default Content"}
 
-    return render_template("about.html", site_info=current_info)
+    return render_template(
+        "about.html",
+        site_info=current_info,
+        is_admin=is_admin(),
+        logged_in=logged_in(),
+    )
 
 
 @app.route("/admin/site-info", methods=["GET", "POST"])

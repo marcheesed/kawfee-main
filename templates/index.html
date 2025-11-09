@@ -90,9 +90,10 @@
             "
         >
             <h1 style="margin:0">kawfee.net</h1>
-            <form method="get" action="/" style="display:flex; height: 90px">
+            <div style="display:flex">
+            <form method="get" action="/">
               <!-- Search input for title, author, tags, fandoms -->
-              <div style="width:500px; margin-right: -170px; margin-top: 33px;">
+              <div style="width:500px; margin-right: -200px">
                 <div>
                   <input
                     type="text"
@@ -104,19 +105,20 @@
                 <!-- Specific Fandom search input -->
               </div>
               <!-- Submit button -->
-              <div style="margin-top: 35px">
+              <div>
                 <button type="submit">Search</button>
               </div>
             </form>
                 {% if current_tag %}
                 <input type="hidden" name="tag" value="{{ current_tag }}" />
                 {% endif %}
+            </div>
         </div>
         <div class="index-container">
             <div class="left-column">
                 <div class="introduction">
                     <h1>{{ site_info.title }}</h1>
-                    <p>{{ site_info.get('content', '')[:230] | replace('\n', '<br>') | safe }}... </p>
+                    <p>{{ site_info.get('content', '')[:280] | replace('\n', '<br>') | safe }}... </p>
                     <a href="{{ url_for('about')}}">Read More</a>
                 </div>
         <div class="tags-filter">
@@ -134,7 +136,7 @@
                           <h3>{{ latest_post.title }}</h3>
                           <p><strong>By:</strong> {{ latest_post.author }}</p>
                           <p><strong>Published on:</strong> {{ latest_post.formatted_timestamp }}</p>
-                          <p>{{  latest_post.content[:215] }}...</p>
+                          <p>{{  latest_post.content[:265] }}...</p>
                           <a href="{{ url_for('view_blog_post', post_id=latest_post.id) }}">Read More</a>
                       </div>
                   {% else %}
