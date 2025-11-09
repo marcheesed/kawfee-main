@@ -106,11 +106,28 @@
 
             <div class="container-1">
                 <h1>{{ fic.title }}</h1>
-                <p>by {{ fic.owner }}</p>
-                <!-- Display the main content of the fic -->
+                <div style="display: flex; justify-content: space-between">
+                    <div>
+                        <span>
+                            <p style="text-align: center">by {{ fic.owner }}</p>
+                            <!-- Display the main content of the fic -->
 
-                <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
-                <p>Age Rating: {{ fic["age_rating"] }}</p>
+                            <p><strong>Fandom:</strong> {{ fic.fandom }}</p>
+                            <p>
+                                <strong>Age Rating:</strong> {{
+                                fic["age_rating"] }}
+                            </p></span
+                        >
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 auto">Tags</h3>
+                        <p>
+                            {% for tag in fic.tags %}
+                            <span>{{ tag }}</span>
+                            {% endfor %}
+                        </p>
+                    </div>
+                </div>
 
                 <div class="fic-main-content">
                     <pre
@@ -125,14 +142,7 @@
             </pre
                     >
                 </div>
-                <!-- Remove chapters display section entirely -->
-
-                <h3>Tags</h3>
-                <p>
-                    {% for tag in fic.tags %}
-                    <span>{{ tag }}</span>
-                    {% endfor %}
-                </p>
+                <!-- kudos and the hellish code: -->
 
                 <h3>Kudos ({{ kudos|length }})</h3>
                 {% if kudos|length > 0 %} {% if kudos|length > 2 %} {{ kudos[:2]
