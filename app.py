@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.18              #
+#            KAWFEE 1.20              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -576,6 +576,9 @@ def index():
             :5
         ]
     ]
+
+    # sort fanfics by number of kudos (highest to lowest)
+    filtered_fanfics.sort(key=lambda f: len(f.get("kudos", [])), reverse=True)
 
     # pagination
     page = int(request.args.get("page", 1))
