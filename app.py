@@ -23,9 +23,16 @@ from jinja2 import pass_environment
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+#######################################
+#                                     #
+#            KAWFEE 1.18              #
+#            @marcheesed              #
+#                                     #
+# #####################################
+
 
 def get_db_connection():
-    conn = sqlite3.connect("dev_data.db", check_same_thread=False)
+    conn = sqlite3.connect("kawfee.db", check_same_thread=False)
     conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
     conn.row_factory = sqlite3.Row
     return conn
@@ -202,7 +209,7 @@ def sanitize_note_content(content):
 
 def get_client_ip():
     if request.headers.get("X-Forwarded-For"):
-        # X-Forwarded-For can contain multiple IPs, take the first one
+        # x-forwarded-for can contain multiple ips so we'll be taking the first one
         ip = request.headers.get("X-Forwarded-For").split(",")[0].strip()
     elif request.headers.get("X-Real-IP"):
         ip = request.headers.get("X-Real-IP")
@@ -234,7 +241,7 @@ def log_ip(username=None, page=None):
 
     try:
         if username:
-            # Check existing log
+            # check existing log
             cursor.execute(
                 """
                 SELECT * FROM ip_logs
@@ -245,7 +252,7 @@ def log_ip(username=None, page=None):
             existing_log = cursor.fetchone()
 
             if existing_log:
-                # Update timestamp
+                # update timestamp
                 execute_with_retry(
                     cursor,
                     """
@@ -254,7 +261,7 @@ def log_ip(username=None, page=None):
                     (now, page, existing_log["id"]),
                 )
             else:
-                # Insert new log
+                # insert new log
                 execute_with_retry(
                     cursor,
                     """
@@ -264,7 +271,7 @@ def log_ip(username=None, page=None):
                     (ip, now, username, page),
                 )
         else:
-            # Log anonymous user
+            # log anonymous user
             execute_with_retry(
                 cursor,
                 """
@@ -293,9 +300,6 @@ def is_admin():
     return False
 
 
-## above is refactored
-
-
 def get_banned_ips():
     conn = get_db_connection()
     ips = conn.execute("SELECT ip FROM banned_ips").fetchall()
@@ -312,7 +316,7 @@ def is_ip_banned(ip):
 
 def save_banned_ip(ip):
     conn = get_db_connection()
-    # Check if IP already exists to prevent duplicates
+    # check if ip already exists to prevent duplicates
     existing = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
     if not existing:
         conn.execute("INSERT INTO banned_ips (ip) VALUES (?)", (ip,))
@@ -352,7 +356,7 @@ def get_site_info():
     print("Fetched site_info:", site_info)
     if site_info:
         site_info_dict = dict(site_info)
-        # Ensure 'content' key exists
+        # ensure 'content' key exists
         if "content" not in site_info_dict:
             site_info_dict["content"] = ""
         return site_info_dict
@@ -376,7 +380,7 @@ def get_fanfics():
 
     for f in fanfics:
         fanfic_id = f["id"]
-        # Fetch tags for this fanfic
+        # fetch tags for this fanfic pleaase
         cursor = conn.execute(
             """
             SELECT t.name FROM tags t
@@ -387,7 +391,7 @@ def get_fanfics():
         )
         tags = [row["name"] for row in cursor.fetchall()]
 
-        # Convert fanfic row to dict and add tags
+        # convert fanfic row to dict and add tags
         fanfic_dict = dict(f)
         fanfic_dict["tags"] = tags
 
@@ -416,7 +420,7 @@ def accept_changes():
         return jsonify({"error": "Not logged in"}), 401
 
     username = session["username"]
-    # Update user's privacy_policy_version to current
+    # update user's privacy_policy_version to current through route
     conn = get_db_connection()
     conn.execute(
         "UPDATE users SET privacy_policy_version = ? WHERE username = ?",
@@ -429,11 +433,11 @@ def accept_changes():
 
 @app.route("/")
 def index():
-    # Fetch blog posts and fanfics from DB
+    # fetch blog posts and fanfics
     blog_posts = get_blog_posts()
     fanfics_list = get_fanfics()
 
-    # Generate posts list
+    # generate posts list
     posts = [
         {
             "id": post["id"],
@@ -447,33 +451,33 @@ def index():
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
     latest_post = posts[0] if posts else None
 
-    # Logging IP
+    # log ip
     log_ip(username=session.get("username"), page=request.path)
 
-    # Fetch current user based on session
+    # fetch current user based on session
     username = session.get("username")
     user = None
     if username:
         user = get_user(username)
 
-    # Determine if popup should be shown
+    # determine if pp popup should be shown
     show_policy_popup = False
     if user and user.get("privacy_policy_version", 0) < CURRENT_POLICY_VERSION:
         show_policy_popup = True
 
-    # Format latest post timestamp
+    # format latest post timestamp
     if latest_post:
         latest_post["formatted_timestamp"] = datetime.fromisoformat(
             latest_post["timestamp"]
         ).strftime("%B %d, %Y at %I:%M %p")
 
-    # Get filter queries
+    # get filter queries
     search_query = request.args.get("search", "").lower()
     author_query = request.args.get("author", "").lower()
     filter_tag = request.args.get("tag", "").lower()
     fandom_search = request.args.get("fandom", "").lower()
 
-    # Load fanfics from DB and parse JSON fields safely
+    # load fanfics from DB and parse JSON fields safely
     fanfics = []
     for f in fanfics_list:
         # handle tags
@@ -504,7 +508,7 @@ def index():
 
         fanfics.append(f)
 
-    # ---- Filtering logic ----
+    # filtering logic
     filtered_fanfics = []
 
     for f in fanfics:
@@ -512,14 +516,14 @@ def index():
         if isinstance(tags, str):
             try:
                 tags = json.loads(tags)
-            except:
+            except json.JSONDecodeError:
                 tags = []
 
         fandoms = f.get("fandoms", [])
         if isinstance(fandoms, str):
             try:
                 fandoms = json.loads(fandoms)
-            except:
+            except json.JSONDecodeError:
                 fandoms = []
 
         combined_fields = (
@@ -547,20 +551,20 @@ def index():
         if match_search and match_author and match_tag and match_fandom:
             filtered_fanfics.append(f)
 
-    # Calculate top tags
+    # calculate top tags (refactor later on with help from trisua)
     tag_counts = {}
     for f in fanfics:
         tags = f.get("tags", [])
-        # Ensure tags is a list
+        # ensure tags is a list
         if isinstance(tags, str):
             try:
                 tags = json.loads(tags)
-            except:
+            except json.JSONDecodeError:
                 tags = [tags]
         elif not isinstance(tags, list):
             tags = [tags]
 
-        # Count each tag (must be string)
+        # count each tag (must be string!!!!)
         for tag in tags:
             if not isinstance(tag, str):
                 continue
@@ -573,7 +577,7 @@ def index():
         ]
     ]
 
-    # Pagination
+    # pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_fanfics = len(filtered_fanfics)
@@ -596,17 +600,16 @@ def index():
         fandom=request.args.get("fandom", ""),
         is_logged_in=is_logged_in(),
         is_admin=is_admin(),
-        show_policy_popup=show_policy_popup,  # <-- add this
+        show_policy_popup=show_policy_popup,
     )
 
 
 @app.route("/filter/tag/<path:tag>")
 def filter_by_single_tag(tag):
-    # Fetch data directly from the database
     fanfics_list = get_fanfics()
     blog_posts = get_blog_posts()
 
-    # Fetch site info and convert to dict if needed
+    # fetch site info and convert to dict if needed
     site_info_row = get_site_info()
     if isinstance(site_info_row, dict):
         site_info = site_info_row
@@ -617,7 +620,8 @@ def filter_by_single_tag(tag):
 
     print("Fetched site_info:", site_info)
 
-    # Convert blog posts to desired format
+    # convert blog posts to our yummy mummy format
+    # man why the fuck did i say that
     posts = [
         {
             "id": post["id"],
@@ -629,25 +633,25 @@ def filter_by_single_tag(tag):
         for post in blog_posts
     ]
 
-    # Sort posts by timestamp descending
+    # sort posts by timestamp descending
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
 
-    # Latest post
+    # latest post
     latest_post = posts[0] if posts else None
 
-    # Log IP
+    # log ip
     log_ip(username=session.get("username"), page=request.path)
     print(
         f"Logging IP: {request.remote_addr}, User: {session.get('username')}, Page: {request.path}"
     )
 
-    # Format latest post timestamp
+    # format latest post timestamp
     if latest_post:
         latest_post["formatted_timestamp"] = datetime.fromisoformat(
             latest_post["timestamp"]
         ).strftime("%B %d, %Y at %I:%M %p")
 
-    # Collect all tags for display
+    # collect all tags for display
     all_tags = set()
     for f in fanfics_list:
         tags_data = f.get("tags", [])
@@ -655,10 +659,10 @@ def filter_by_single_tag(tag):
             if tags_data.strip():
                 try:
                     tags_data = json.loads(tags_data)
-                except:
+                except json.JSONDecodeError:
                     tags_data = []
         for t in tags_data:
-            # Convert list to string to avoid unhashable errors
+            # convert list to string to avoid unhashable errors
             if isinstance(t, list):
                 t_str = json.dumps(t, sort_keys=True)
             elif isinstance(t, str):
@@ -668,24 +672,24 @@ def filter_by_single_tag(tag):
                         t_str = json.dumps(t_parsed, sort_keys=True)
                     else:
                         t_str = t
-                except:
+                except json.JSONDecodeError:
                     t_str = t
             else:
                 t_str = str(t)
             all_tags.add(t_str)
 
-    # Initialize data dictionary
+    # initialize data dictionary
     data = {}
     data["tags"] = list(all_tags)
 
-    # Filter fanfics by the specified tag
+    # filter fanfics by the specified tag
     filtered_fanfics = [f for f in fanfics_list if tag in f.get("tags", [])]
 
-    # Get current search filters
+    # get current search filters
     search_query = request.args.get("search", "")
     author_query = request.args.get("author", "")
 
-    # Count tags for top tags
+    # count tags for top tags
     tag_counts = {}
     for f in fanfics_list:
         for t in f.get("tags", []):
@@ -699,17 +703,17 @@ def filter_by_single_tag(tag):
                         t_parsed = json.dumps(t_parsed, sort_keys=True)
                     else:
                         t_parsed = t
-                except:
+                except json.JSONDecodeError:
                     t_parsed = t
             else:
                 t_parsed = str(t)
             tag_counts[t_parsed] = tag_counts.get(t_parsed, 0) + 1
 
-    # Get top 5 tags
+    # get top 5 tags
     top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     top_tags_list = [tag for tag, count in top_tags]
 
-    # Pagination
+    # pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_fanfics = len(filtered_fanfics)
@@ -737,6 +741,8 @@ def filter_by_single_tag(tag):
     )
 
 
+# refactor for public release, but for now this is fine
+
 ALLOWED_USERNAMES = [
     "cammy",
     "offiz",
@@ -755,6 +761,7 @@ def register():
         username = request.form["username"]
         password = request.form["password"]
 
+        ##### remember to remove this for public release
         # check if username is in allowed list
         if username not in ALLOWED_USERNAMES:
             abort(403)
@@ -782,7 +789,7 @@ def register():
             "custom_css": "",
             "display_name": "",
             "ip": ip_address,
-            "privacy_policy_version": CURRENT_POLICY_VERSION,  # Track the version at registration
+            "privacy_policy_version": CURRENT_POLICY_VERSION,  # track the version at registration
         }
 
         # save new user to database
@@ -825,7 +832,7 @@ def login():
             abort(404)
 
         # check if user is banned
-        if user.get("banned"):
+        if user and user.get("banned"):
             abort(403)
 
         # retrieve the stored hashed password
@@ -835,7 +842,7 @@ def login():
         if bcrypt.checkpw(password.encode("utf-8"), stored_hashed.encode("utf-8")):
             # password is correct
 
-            # get current ip using get_client_ip() for accurate IP behind proxies
+            # get current ip using get_client_ip() for accurate ip behind proxies
             ip_address = get_client_ip()
 
             # log the ip in the audit log
@@ -849,30 +856,36 @@ def login():
             conn.commit()
             conn.close()
 
-            # set session variables
             session["username"] = username
-            session["is_admin"] = user.get("is_admin", False)
+            if user:
+                session["is_admin"] = user.get("is_admin", False)
+            else:
+                # handle the case if user is None (though, it shouldn't be here if your earlier check aborts)
+                session["is_admin"] = False
 
-            # Check if user needs to accept latest privacy policy
-            user_policy_version = user.get("privacy_policy_version", 0)
-            if user_policy_version < CURRENT_POLICY_VERSION:
-                show_policy_popup = True
+            if user:
+                user_policy_version = user.get("privacy_policy_version", 0)
+                if user_policy_version < CURRENT_POLICY_VERSION:
+                    show_policy_popup = True
+            else:
+                # handle the case where user is none if necessary
+                pass
 
             print("Session 'is_admin' set to:", session["is_admin"])  # debug
 
-            # Redirect to index, passing popup info if needed
+            # redirect to index passing popup info if needed
             return redirect(url_for("index", show_policy_popup=show_policy_popup))
         else:
             return "Invalid credentials"
 
-    # for GET request
+    # for get request
     logged_in = "username" in session
     if logged_in:
         username = session["username"]
         user = get_user(username)
         admin_status = session.get("is_admin", False)
 
-        # Check if user needs to accept latest privacy policy
+        # check if user needs to accept latest privacy policy
         user_policy_version = user.get("privacy_policy_version", 0)
         print(
             "User policy version:",
@@ -900,7 +913,7 @@ def tos():
     is_admin = False
     logged_in = False
 
-    # Check if user is logged in
+    # check if user is logged in
     if "username" in session:
         username = session["username"]
         is_admin = session.get("is_admin", False)
@@ -917,7 +930,7 @@ def privacy():
     is_admin = False
     logged_in = False
 
-    # Check if user is logged in
+    # check if user is logged in
     if "username" in session:
         username = session["username"]
         is_admin = session.get("is_admin", False)
@@ -936,7 +949,7 @@ def logout():
 
 @app.route("/delete_fic/<int:fic_id>", methods=["POST"])
 def delete_fic(fic_id):
-    # Delete the fanfic from the database
+    # delete the fanfic from the database
     conn = get_db_connection()
     conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
     conn.commit()
@@ -950,14 +963,14 @@ def delete_fic(fic_id):
 
 @app.route("/add_tag", methods=["POST"])
 def add_tag():
-    # get the tag from JSON request
+    # get the tag from json request
     data_in = request.get_json()
     new_tag = data_in.get("tag", "").strip()
 
     if not new_tag:
         return jsonify({"success": False, "error": "No tag provided"}), 400
 
-    # Check if the tag already exists in the database
+    # check if the tag already exists in the database
     conn = get_db_connection()
     existing = conn.execute("SELECT 1 FROM tags WHERE name = ?", (new_tag,)).fetchone()
 
@@ -965,7 +978,7 @@ def add_tag():
         conn.close()
         return jsonify({"success": True, "message": "Tag already exists"})
 
-    # Insert the new tag
+    # insert the new tag
     conn.execute("INSERT INTO tags (name) VALUES (?)", (new_tag,))
     conn.commit()
     conn.close()
@@ -975,29 +988,36 @@ def add_tag():
 
 @app.route("/profile/<username>")
 def user_profile(username):
-    # Fetch user details from the database
+    # fetch user details from the database
     user = get_user(username)
+
+    # check if user exists
     if not user:
         abort(404)
 
-    user["username"] = username
+    # ensure the user is a dictionary or similar mutable object
+    if isinstance(user, dict):
+        user["username"] = username
+    else:
+        # handle unexpected data structure
+        abort(500)  # spit out to custom error page
 
-    # Check if the current logged-in user is the owner
+    # check if the current logged-in user is the owner
     is_owner = username == session.get("username")
     logged_in = "username" in session
     admin_status = is_admin()
 
-    # Fetch fanfics owned by the user from the database
+    # fetch fanfics owned by the user from the database
     conn = get_db_connection()
     fanfics_rows = conn.execute(
         "SELECT * FROM fanfics WHERE owner = ?", (username,)
     ).fetchall()
     conn.close()
 
-    # Convert to list of dicts
+    # convert to list of dicts
     fanfics = [dict(row) for row in fanfics_rows]
 
-    # Pagination
+    # pagination
     page = int(request.args.get("page", 1))
     per_page = 3
     total_fanfics = len(fanfics)
@@ -1030,10 +1050,10 @@ def profile():
     if not user:
         abort(404)
 
-    # Log IP
+    # log ip
     log_ip(username=username, page=request.path)
 
-    # Fetch fanfics owned by the user from the database
+    # fetch fanfics owned by the user from the database
     conn = get_db_connection()
     fanfics_rows = conn.execute(
         "SELECT * FROM fanfics WHERE owner = ?", (username,)
@@ -1042,7 +1062,7 @@ def profile():
 
     fanfics = [dict(row) for row in fanfics_rows]
 
-    # Pagination
+    # pagination
     page = int(request.args.get("page", 1))
     per_page = 3
     total_fanfics = len(fanfics)
@@ -1051,9 +1071,7 @@ def profile():
     end = start + per_page
     display_fanfics = fanfics[start:end]
 
-    # Assuming notes are stored in the database, fetch notes if needed
-    # For now, using placeholder
-    notes_data = {}  # Replace with actual database fetch if applicable
+    notes_data = {}  # remove laterrrr
 
     return render_template(
         "profile.html",
@@ -1063,7 +1081,7 @@ def profile():
         session=session,
         logged_in=True,
         user=user,
-        is_owner=True,  # Since this is your profile page
+        is_owner=True,  # since this would be the persons profile
         is_admin=is_admin(),
         current_page=page,
         total_pages=total_pages,
@@ -1168,9 +1186,6 @@ def edit_profile():
     )
 
 
-###### yuh
-
-
 @app.route("/submit", methods=["GET", "POST"])
 def submit():
     if not logged_in():
@@ -1180,27 +1195,27 @@ def submit():
 
     conn = get_db_connection()
 
-    # Fetch all tags for display
+    # fetch all tags for display
     all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
     all_tags = [row["name"] for row in all_tags_rows]
 
     if request.method == "POST":
-        # Generate new fanfic ID
+        # generate new fanfic id
         max_id_row = conn.execute("SELECT MAX(id) FROM fanfics").fetchone()
         new_id = (max_id_row[0] or 0) + 1
 
-        # Get form data
-        # Note: 'tags' is a JSON string sent from the form
+        # get form data
+        # note: 'tags' is a JSON string sent from the form
         tags_json = request.form.get("tags", "[]")
         try:
             combined_tags = json.loads(tags_json)
-            # Ensure it's a list
+            # ensure it's a list
             if not isinstance(combined_tags, list):
                 combined_tags = []
         except json.JSONDecodeError:
             combined_tags = []
 
-        # Add new_tag if provided
+        # add new_tag if provided
         new_tag = request.form.get("new_tag", "").strip()
         if new_tag:
             if new_tag not in combined_tags:
@@ -1209,7 +1224,7 @@ def submit():
         age_rating = request.form.get("age_rating")
         content_text = request.form.get("content")
 
-        # Insert new fanfic record
+        # insert new fanfic record
         conn.execute(
             """
             INSERT INTO fanfics (
@@ -1229,11 +1244,11 @@ def submit():
             ),
         )
 
-        # Handle tags: insert new tags and create associations
+        # handle tags: insert new tags and create associations
         for tag in combined_tags:
             print(f"Inserting or ignoring tag: {tag}")
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
-            # Fetch the tag id
+            # fetch the tag id
             tag_row = conn.execute(
                 "SELECT id FROM tags WHERE name = ?", (tag,)
             ).fetchone()
@@ -1244,14 +1259,14 @@ def submit():
                     (new_id, tag_row["id"]),
                 )
 
-        # Commit all changes
+        # commit all changes
         conn.commit()
         conn.close()
 
         print("New fanfic added with content.")
         return redirect(url_for("view_fic", fid=new_id))
 
-    # For GET request, just render the form
+    # for GET request, just render the form
     return render_template(
         "fanfic/submit.html",
         logged_in=True,
@@ -1264,7 +1279,7 @@ def submit():
 def view_fic(fid):
     conn = get_db_connection()
 
-    # Fetch the main fanfic record
+    # fetch the main fanfic record
     fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
     if not fanfic_row:
         conn.close()
@@ -1272,7 +1287,7 @@ def view_fic(fid):
 
     fanfic = dict(fanfic_row)
 
-    # Parse comments
+    # parse comments
     comments_json = fanfic.get("comments")
     if comments_json:
         try:
@@ -1282,7 +1297,7 @@ def view_fic(fid):
     else:
         comments = []
 
-    # Deduplicate comments
+    # deduplicate comments
     unique_comments = []
     seen = set()
     for c in comments:
@@ -1292,7 +1307,7 @@ def view_fic(fid):
             unique_comments.append(c)
     fanfic["comments"] = unique_comments
 
-    # Parse kudos
+    # parse kudos
     kudos_json = fanfic.get("kudos")
     if kudos_json:
         try:
@@ -1302,15 +1317,15 @@ def view_fic(fid):
     else:
         kudos_list = []
 
-    # Deduplicate kudos
+    # deduplicate kudos
     kudos = list(set(kudos_list))
 
-    # Fetch chapters (but dont display them)
+    # fetch chapters (but dont display them or else it breaks)
     chapters_rows = conn.execute(
         "SELECT * FROM chapters WHERE fanfic_id = ?", (fid,)
     ).fetchall()
 
-    # Fetch tags
+    # fetch tags
     tags_rows = conn.execute(
         "SELECT t.name FROM tags t JOIN fanfic_tags ft ON t.id = ft.tag_id WHERE ft.fanfic_id = ?",
         (fid,),
@@ -1318,7 +1333,7 @@ def view_fic(fid):
 
     conn.close()
 
-    # Process chapters content (not used for display, but you can keep this if needed)
+    # process chapters content (not used for display)
     chapters = [dict(c) for c in chapters_rows] if chapters_rows else []
     for chapter in chapters:
         if "content" in chapter:
@@ -1327,20 +1342,19 @@ def view_fic(fid):
             ).strip()
             chapter["content"] = re.sub(r"\n\s*\n+", "\n\n", chapter["content"])
 
-    # Extract tag names
+    # extract tag names
     tags = [row["name"] for row in tags_rows]
     fanfic["tags"] = tags
 
-    # Check user session and get admin status
+    # check user session and get admin status
     user = get_user(session.get("username", ""))
     is_admin = user.get("is_admin", False) if user else False
     return render_template(
         "fanfic/view_fic.html",
         fic_content=fanfic["content"],
-        # pass other variables as needed, e.g., comments, kudos, tags, etc.
         comments=comments,
         kudos=kudos,
-        fic=fanfic,  # optional, if you need other info
+        fic=fanfic,
         logged_in=("username" in session),
         is_admin=is_admin,
     )
@@ -1348,36 +1362,36 @@ def view_fic(fid):
 
 @app.route("/edit/<int:fid>", methods=["GET", "POST"])
 def edit_fic(fid):
-    # Fetch the fanfic from the database
+    # fetch the fanfic from the database
     conn = get_db_connection()
     fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
     if not fanfic_row:
         conn.close()
         return "Fanfic not found"
 
-    # Check ownership and login
+    # check ownership and login
     if not logged_in() or fanfic_row["owner"] != session["username"]:
         conn.close()
         return "Unauthorized"
 
-    # Fetch all tags for display
+    # fetch all tags for display
     all_tags_rows = conn.execute("SELECT name FROM tags").fetchall()
     all_tags = [row["name"] for row in all_tags_rows]
 
-    # Fetch chapters
+    # fetch chapters
     chapters_rows = conn.execute(
         "SELECT * FROM chapters WHERE fanfic_id = ? ORDER BY id", (fid,)
     ).fetchall()
     chapters = [dict(c) for c in chapters_rows]
 
-    # Fetch tags associated with this fanfic
+    # fetch tags associated with this fanfic
     tags_rows = conn.execute(
         "SELECT t.name FROM tags t JOIN fanfic_tags ft ON t.id = ft.tag_id WHERE ft.fanfic_id = ?",
         (fid,),
     ).fetchall()
     current_tags = [row["name"] for row in tags_rows]
 
-    # Parse comments JSON
+    # parse comments JSON
     comments_json = fanfic_row["comments"]
     if comments_json:
         try:
@@ -1387,7 +1401,7 @@ def edit_fic(fid):
     else:
         comments = []
 
-    # Parse kudos JSON
+    # parse kudos JSON
     kudos_json = fanfic_row["kudos"]
     if kudos_json:
         try:
@@ -1397,21 +1411,21 @@ def edit_fic(fid):
     else:
         kudos = []
 
-    # Handle POST request for updating fanfic
+    # handle POST request for updating fanfic
     if request.method == "POST":
         # Parse tags from form
         tags_str = request.form.get("tags", "")
         selected_tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
 
-        # Handle new tag input
+        # handle new tag input
         new_tag = request.form.get("new_tag", "").strip()
         if new_tag:
             selected_tags.append(new_tag)
 
-        # Deduplicate tags
+        # deduplicate tags
         updated_tags = list(set(selected_tags))
 
-        # Collect chapters
+        # collect chapters
         chapters = []
         pattern_title = re.compile(r"chapter_title_(\d+)")
         for key in request.form:
@@ -1424,7 +1438,7 @@ def edit_fic(fid):
                     content = re.sub(r"\n+", "\n", content.strip()) if content else ""
                     chapters.append({"title": title, "content": content})
 
-        # Update main fanfic fields including content
+        # update main fanfic fields including content
         conn.execute(
             "UPDATE fanfics SET title=?, fandom=?, age_rating=?, content=? WHERE id=?",
             (
@@ -1436,7 +1450,7 @@ def edit_fic(fid):
             ),
         )
 
-        # Update chapters: delete existing and insert new
+        # update chapters: delete existing and insert new
         conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fid,))
         for chapter in chapters:
             conn.execute(
@@ -1444,10 +1458,10 @@ def edit_fic(fid):
                 (fid, chapter["title"], chapter["content"]),
             )
 
-        # Update tags: clear old associations
+        # update tags: clear old associations
         conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fid,))
 
-        # Insert tags and create associations
+        # insert tags and create associations
         for tag in updated_tags:
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
             tag_id_row = conn.execute(
@@ -1459,16 +1473,13 @@ def edit_fic(fid):
                     (fid, tag_id_row["id"]),
                 )
 
-        # Save comments and kudos if needed (your logic)
-        # (assuming you handle comments/kudos elsewhere or add here)
-
         conn.commit()
         conn.close()
         return redirect(url_for("view_fic", fid=fid))
 
     conn.close()
 
-    # Render edit form with current data, including content
+    # render edit form with current data
     return render_template(
         "fanfic/edit_fic.html",
         fic={
@@ -1495,10 +1506,10 @@ def add_kudo(fid):
     if not logged_in():
         return redirect(url_for("login"))
 
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
 
-    # Fetch the fanfic record
+    # fetch the fanfic record
     fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
     if not fanfic_row:
         conn.close()
@@ -1506,7 +1517,7 @@ def add_kudo(fid):
 
     fanfic = dict(fanfic_row)
 
-    # Parse current kudos
+    # parse current kudos
     kudos_json = fanfic.get("kudos")
     if kudos_json:
         try:
@@ -1520,14 +1531,14 @@ def add_kudo(fid):
     if user not in kudos_list:
         kudos_list.append(user)
 
-        # Save updated kudos back to the database
+        # save updated kudos back to the database
         updated_kudos_json = json.dumps(kudos_list)
         conn.execute(
             "UPDATE fanfics SET kudos = ? WHERE id = ?", (updated_kudos_json, fid)
         )
         conn.commit()
 
-        # Log IP
+        # log ip
         log_ip(username=user, page=request.path)
 
     conn.close()
@@ -1562,10 +1573,14 @@ def user_exists_in_comments(fanfic_id, username):
     return False
 
 
-def linkify_mentions(content, fanfic_id):
+def linkify_mentions(content, fanfic_id, replied_username=None):
     def replace_mention(match):
         username = match.group(1)
-        if user_exists_in_comments(fanfic_id, username):
+        # if the mention is the replied user, link to their profile
+        if username == replied_username:
+            return f'<a href="{url_for("profile", username=username)}">@{username}</a>'
+        # otherwise, check if the user exists in comments
+        elif user_exists_in_comments(fanfic_id, username):
             return f'<a href="{url_for("profile", username=username)}">@{username}</a>'
         else:
             return f"@{username}"
@@ -1579,7 +1594,7 @@ def add_comment(fid):
     if not logged_in():
         return redirect(url_for("login"))
 
-    # Fetch current fanfic record
+    # fetch current fanfic record
     conn = get_db_connection()
     fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
     if not fanfic_row:
@@ -1588,7 +1603,7 @@ def add_comment(fid):
 
     fanfic = dict(fanfic_row)
 
-    # Parse existing comments JSON
+    # parse existing comments JSON
     comments_json = fanfic.get("comments")
     if comments_json:
         try:
@@ -1598,12 +1613,12 @@ def add_comment(fid):
     else:
         comments = []
 
-    # Prepare new comment
+    # prepare new comment
     content = request.form["content"]
     content_with_links = linkify_mentions(content, fid)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username = session["username"]
-    user = get_user(username)  # assuming you have this function
+    user = get_user(username)
     pfp_path = user["pfp"] if user and "pfp" in user else ""
 
     new_comment = {
@@ -1611,13 +1626,13 @@ def add_comment(fid):
         "content": content_with_links,
         "timestamp": timestamp,
         "pfp": pfp_path,
-        "user": user,  # optional, if you want to store full user info
+        "user": user,
     }
 
-    # Append new comment
+    # append new comment
     comments.append(new_comment)
 
-    # Save updated comments JSON back to the database
+    # save updated comments JSON back to the database
     updated_comments_json = json.dumps(comments)
     conn.execute(
         "UPDATE fanfics SET comments = ? WHERE id = ?", (updated_comments_json, fid)
@@ -1634,7 +1649,7 @@ def delete_comment(fid, comment_index):
     if not logged_in():
         return redirect(url_for("login"))
 
-    # Fetch the fanfic from database
+    # fetch the fanfic from database
     conn = get_db_connection()
     fanfic_row = conn.execute("SELECT * FROM fanfics WHERE id = ?", (fid,)).fetchone()
     if not fanfic_row:
@@ -1643,7 +1658,7 @@ def delete_comment(fid, comment_index):
 
     fanfic = dict(fanfic_row)
 
-    # Decode comments JSON
+    # decode comments JSON
     comments_json = fanfic.get("comments")
     if comments_json:
         try:
@@ -1653,7 +1668,7 @@ def delete_comment(fid, comment_index):
     else:
         comments = []
 
-    # Validate index
+    # validate index
     if comment_index < 0 or comment_index >= len(comments):
         conn.close()
         abort(404)
@@ -1662,20 +1677,20 @@ def delete_comment(fid, comment_index):
     current_user = session.get("username")
     is_admin = session.get("is_admin", False)
 
-    # Check permissions: admins can delete any, users only their own
+    # check permissions: admins can delete any, users only their own
     if is_admin:
-        # Admins are allowed to delete any comment
+        # if admins are allowed to delete any comment
         pass
     else:
-        # Regular users can only delete their own comments
+        # then regular users can only delete their own comments
         if comment["name"] != current_user:
             conn.close()
             abort(403)
 
-    # Remove comment
+    # remove comment
     comments.pop(comment_index)
 
-    # Save updated comments json back to database
+    # save updated comments json back to database
     updated_comments_json = json.dumps(comments)
     conn.execute(
         "UPDATE fanfics SET comments = ? WHERE id = ?", (updated_comments_json, fid)
@@ -1683,24 +1698,21 @@ def delete_comment(fid, comment_index):
     conn.commit()
     conn.close()
 
-    # Log deletion
+    # log deletion
     log_ip(username=current_user, page=request.path)
 
     return redirect(url_for("view_fic", fid=fid))
-
-
-# fully refactored above
 
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
     current_ip = request.remote_addr
 
-    # Check if IP is banned
+    # check if IP is banned
     if is_ip_banned(current_ip):
         abort(403)
 
-    # Check user session and admin status
+    # check user session and admin status
     username = session.get("username")
     if not username:
         abort(404)
@@ -1709,20 +1721,20 @@ def admin_panel():
     if not user or not user.get("is_admin"):
         abort(403)
 
-    # Log access
+    # log access
     log_ip(username=username, page=request.path)
 
-    # Handle banning IP via POST
+    # handle banning IP via POST
     if request.method == "POST":
         ip_to_ban = request.form.get("ip")
         if ip_to_ban:
             save_banned_ip(ip_to_ban)
             return f"IP {ip_to_ban} has been banned.", 200
 
-    # Fetch all users
+    # fetch all users
     users = get_all_users()
 
-    # Fetch latest IP from ip_logs for each user:
+    # fetch latest ip from ip_logs for each user:
     # SQL: get the most recent log per user
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1738,13 +1750,13 @@ def admin_panel():
     """)
     latest_logs = {row["username"]: row["ip"] for row in cursor.fetchall()}
 
-    # Close connection
+    # close connection
     conn.close()
 
-    # Prepare user_ips dict for template
+    # prepare user_ips dict for template
     user_ips = {u["username"]: latest_logs.get(u["username"], "Unknown") for u in users}
 
-    # Fetch fanfics, if applicable
+    # fetch fanfics, if applicable
     fanfics = get_fanfics()
 
     return render_template(
@@ -1757,8 +1769,11 @@ def admin_panel():
         logged_in=True,
         user_ips=user_ips,
         users=users,
-        user_logs=None,  # if you want to include logs, fetch & pass separately
+        user_logs=None,
     )
+
+
+# add it so it deletes fics, notes, comments etc
 
 
 @app.route("/admin/delete_user/<username>", methods=["POST"])
@@ -1766,18 +1781,18 @@ def delete_user(username):
     if not is_admin():
         abort(403)
 
-    # Fetch user from database
+    # fetch user from database
     user = get_user(username)
     if not user:
         abort(404)
 
-    # Delete user from database
+    # delete user from database
     conn = get_db_connection()
     try:
         conn.execute("DELETE FROM users WHERE username = ?", (username,))
         conn.commit()
     except Exception as e:
-        # Log error if needed
+        # log error if needed
         return f"Error deleting user: {str(e)}", 500
     finally:
         conn.close()
@@ -1792,19 +1807,19 @@ def delete_fic_admin(fic_id):
 
     conn = get_db_connection()
     try:
-        # Check if fanfic exists
+        # check if fanfic exists
         fanfic = conn.execute(
             "SELECT * FROM fanfics WHERE id = ?", (fic_id,)
         ).fetchone()
         if not fanfic:
             abort(404)
 
-        # Delete fanfic
+        # delete fanfic
         conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
-        # Also delete associated chapters, tags, etc., if applicable
+        # also delete associated chapters, tags, etc., if applicable
         conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fic_id,))
         conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
-        # Commit changes
+        # commit changes
         conn.commit()
     except Exception as e:
         return f"Error deleting fanfic: {str(e)}", 500
@@ -1847,9 +1862,9 @@ def set_display_name(username):
                 "admin/set_display_name.html", user=user, error=error
             )
 
-        # Only allow admins to set display names for users
-        if user.get("is_admin"):
-            # Update display_name in the database directly
+        # only allow admins to set display names
+        if user and user.get("is_admin"):
+            # update display_name in the database directly
             conn = get_db_connection()
             conn.execute(
                 "UPDATE users SET display_name = ? WHERE username = ?",
@@ -1862,18 +1877,22 @@ def set_display_name(username):
         else:
             abort(403)
 
-    # For GET request, ensure display_name exists in the database
-    if not user.get("display_name"):
-        # Optionally, set display_name to username if not set
-        conn = get_db_connection()
-        conn.execute(
-            "UPDATE users SET display_name = ? WHERE username = ?",
-            (user["username"], username),
-        )
-        conn.commit()
-        conn.close()
+    # for get request, ensure display_name exists in the database
+    if user is None:
+        # handle the case where user is none. just skip
+        pass
+    else:
+        if not user.get("display_name"):
+            # set display_name to username if not set
+            conn = get_db_connection()
+            conn.execute(
+                "UPDATE users SET display_name = ? WHERE username = ?",
+                (user["username"], username),
+            )
+            conn.commit()
+            conn.close()
 
-        # Re-fetch user if needed
+        # re-fetch user if needed
         user = get_user(username)
 
     return render_template(
@@ -1896,22 +1915,22 @@ def notes():
 
     log_ip(username=username, page=request.path)
 
-    # Connect to DB
+    # connect to db
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Count total notes for pagination
+    # count total notes for pagination
     total_notes = cursor.execute(
         "SELECT COUNT(*) FROM notes WHERE owner = ?", (username,)
     ).fetchone()[0]
 
-    # Pagination setup
+    # pagination setup
     page = int(request.args.get("page", 1))
     per_page = 10
     total_pages = (total_notes + per_page - 1) // per_page
     start = (page - 1) * per_page
 
-    # Fetch notes for the current page
+    # fetch notes for the current page
     cursor.execute(
         "SELECT id, content FROM notes WHERE owner = ? ORDER BY id DESC LIMIT ? OFFSET ?",
         (username, per_page, start),
@@ -1920,7 +1939,7 @@ def notes():
     notes_rows = cursor.fetchall()
     conn.close()
 
-    # Format notes
+    # format notes
     notes_with_ids = [
         {"id": row["id"], "content": row["content"]} for row in notes_rows
     ]
@@ -1949,11 +1968,11 @@ def view_note(note_id):
     if not user:
         abort(404)
 
-    # Connect to DB
+    # connect to db
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch the note by id
+    # fetch the note by id
     cursor.execute("SELECT owner, content FROM notes WHERE id = ?", (note_id,))
     row = cursor.fetchone()
     conn.close()
@@ -1964,14 +1983,14 @@ def view_note(note_id):
     owner = row["owner"]
     content = row["content"]
 
-    # Authorization check: only owner can view
+    # authorization check: only owner can view
     if owner != username:
         abort(403)
 
-    # If content is JSON, decode it
+    # if content is JSON, decode it
     try:
         note_data = json.loads(content)
-        # If note_data is a dict with 'content', extract it
+        # if note_data is a dict with 'content', extract it
         if isinstance(note_data, dict) and "content" in note_data:
             display_content = note_data["content"]
         else:
@@ -2005,7 +2024,7 @@ def new_note():
         content = request.form["content"]
         sanitized_content = sanitize_note_content(content)
 
-        # Insert into database
+        # insert into database
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -2014,7 +2033,7 @@ def new_note():
         )
         conn.commit()
 
-        # Get the new note's id
+        # get the new note's id
         note_id = cursor.lastrowid
         conn.close()
 
@@ -2029,7 +2048,7 @@ def new_note():
 
 @app.route("/notes/<note_id>/edit", methods=["GET", "POST"])
 def edit_note(note_id):
-    # Fetch the note from the database
+    # fetch the note from the database
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT owner, content FROM notes WHERE id = ?", (note_id,))
@@ -2044,7 +2063,7 @@ def edit_note(note_id):
     content = row["content"]
     current_user = session.get("username")
 
-    # Check ownership
+    # check ownership
     if owner != current_user:
         conn.close()
         print(f"User {current_user} unauthorized to edit note {note_id}")
@@ -2054,7 +2073,7 @@ def edit_note(note_id):
 
     if request.method == "POST":
         if request.form.get("delete"):
-            # Delete the note
+            # delete the note
             cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
             conn.commit()
             conn.close()
@@ -2095,11 +2114,11 @@ def edit_note(note_id):
 
 @app.route("/blog")
 def blog():
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch all blog posts with authors
+    # fetch all blog posts with authors
     cursor.execute("""
         SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name, bp.author
         FROM blog_posts bp
@@ -2108,19 +2127,19 @@ def blog():
     posts_rows = cursor.fetchall()
     conn.close()
 
-    # Prepare posts list
+    # prepare posts list
     posts = []
     for row in posts_rows:
-        # Safely get 'display_name'
+        # safely get 'display_name'
         display_name = (
             row["display_name"]
             if "display_name" in row and row["display_name"]
             else None
         )
-        # Safely get 'author'
+        # safely get 'author'
         author_value = row["author"] if "author" in row else ""
 
-        # Fallback for author display
+        # fallback for author display
         author_display = display_name if display_name else author_value
         timestamp_str = row["timestamp"]
         try:
@@ -2141,11 +2160,11 @@ def blog():
             }
         )
 
-    # Sort posts by timestamp descending
+    # sort posts by timestamp descending
     posts.sort(key=lambda x: x["timestamp"], reverse=True)
     print(f"Number of posts in list: {len(posts)}")
 
-    # Pagination
+    # pagination
     page = int(request.args.get("page", 1))
     per_page = 6
     total_posts = len(posts)
@@ -2166,11 +2185,11 @@ def blog():
 
 @app.route("/blog/<post_id>")
 def view_blog_post(post_id):
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch the post along with author display name
+    # fetch the post along with author display name
     cursor.execute(
         """
         SELECT bp.id, bp.title, bp.content, bp.timestamp, u.display_name, bp.author
@@ -2186,7 +2205,7 @@ def view_blog_post(post_id):
     if not row:
         abort(404)
 
-    # Safely get display_name; fallback to 'author' if missing
+    # safely get display_name; fallback to 'author' if missing
     display_name = (
         row["display_name"]
         if "display_name" in row.keys() and row["display_name"]
@@ -2196,7 +2215,7 @@ def view_blog_post(post_id):
 
     author_display = display_name if display_name else author_value
 
-    # Prepare post data
+    # prepare post data
     post = {
         "id": row["id"],
         "title": row["title"],
@@ -2205,7 +2224,7 @@ def view_blog_post(post_id):
         "author": author_display,
     }
 
-    # Format timestamp
+    # format timestamp
     try:
         post["formatted_timestamp"] = datetime.fromisoformat(
             post["timestamp"]
@@ -2230,16 +2249,16 @@ def new_blog_post():
     username = session.get("username")
     user = get_user(username) if username else None
 
-    # Check if user is admin
+    # check if user is admin
     if not user or not user.get("is_admin", False):
         abort(403)
 
     if request.method == "POST":
         title = request.form["title"]
         content = request.form["content"]
-        display_name = user.get("display_name", username)
+        display_name = user.get("display_name", username) if user else username
 
-        # Insert new post into database
+        # insert new post into database
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -2264,7 +2283,7 @@ def new_blog_post():
 
 @app.route("/blog/<post_id>/edit", methods=["GET", "POST"])
 def edit_blog_post(post_id):
-    # Fetch the post from the database
+    # fetch the post from the database
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -2277,7 +2296,7 @@ def edit_blog_post(post_id):
         conn.close()
         abort(404)
 
-    # Check if user is admin
+    # check if user is admin
     username = session.get("username")
     user = get_user(username) if username else None
 
@@ -2290,7 +2309,7 @@ def edit_blog_post(post_id):
         content = request.form["content"]
         timestamp = datetime.now().isoformat()
 
-        # Update the post in the database
+        # update the post in the database
         cursor.execute(
             """
             UPDATE blog_posts
@@ -2304,7 +2323,7 @@ def edit_blog_post(post_id):
 
         return redirect(url_for("view_blog_post", post_id=post_id))
     else:
-        # Render the edit form with the current post data
+        # render the edit form with the current post data
         conn.close()
         return render_template(
             "admin/edit_blog_post.html",
@@ -2315,28 +2334,27 @@ def edit_blog_post(post_id):
         )
 
 
-# i kinda give up on comments sorry
 @app.route("/blog/<post_id>/delete", methods=["POST"])
 def delete_blog_post(post_id):
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Check if the post exists
+    # check if the post exists
     cursor.execute("SELECT id FROM blog_posts WHERE id = ?", (post_id,))
     post = cursor.fetchone()
     if not post:
         conn.close()
         abort(404)
 
-    # Check admin permissions
+    # check admin permissions
     username = session.get("username")
     user = get_user(username) if username else None
     if not user or not user.get("is_admin", False):
         conn.close()
         abort(403)
 
-    # Delete the post
+    # delete the post
     cursor.execute("DELETE FROM blog_posts WHERE id = ?", (post_id,))
     conn.commit()
     conn.close()
@@ -2346,14 +2364,14 @@ def delete_blog_post(post_id):
 
 @app.route("/about")
 def about():
-    # Fetch site info from database or set defaults
+    # fetch site info from database or set defaults
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT title, content FROM site_info")
     site_info = cursor.fetchone()
     conn.close()
 
-    # Prepare data for template
+    # prepare data for template
     if site_info:
         current_info = {"title": site_info["title"], "content": site_info["content"]}
     else:
@@ -2364,26 +2382,26 @@ def about():
 
 @app.route("/admin/site-info", methods=["GET", "POST"])
 def edit_site_info():
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
     if request.method == "POST":
-        # Get updated info from form
+        # get updated info from form
         title = request.form.get("title")
         content = request.form.get("content")
 
-        # Check if site info exists
+        # check if site info exists
         cursor.execute("SELECT * FROM site_info")
         existing = cursor.fetchone()
 
         if existing:
-            # Update existing record
+            # update existing record
             cursor.execute(
                 "UPDATE site_info SET title = ?, content = ?", (title, content)
             )
         else:
-            # Insert new record if not exists
+            # insert new record if not exists
             cursor.execute(
                 "INSERT INTO site_info (title, content) VALUES (?, ?)", (title, content)
             )
@@ -2392,12 +2410,12 @@ def edit_site_info():
         conn.close()
         return redirect(url_for("about"))
 
-    # For GET, fetch current site info
+    # for GET, fetch current site info
     cursor.execute("SELECT title, content FROM site_info")
     site_info = cursor.fetchone()
     conn.close()
 
-    # Prepare data for template
+    # prepare data for template
     if site_info:
         current_info = {"title": site_info["title"], "content": site_info["content"]}
     else:
@@ -2420,15 +2438,15 @@ def format_datetime(value):
 @app.route("/admin/logs")
 def show_logs():
     username = session.get("username")
-    # Connect to the database
+    # connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch all users
+    # fetch all users
     cursor.execute("SELECT username FROM users")
     users_list = [row["username"] for row in cursor.fetchall()]
 
-    # Fetch IP logs
+    # fetch ip logs
     cursor.execute("SELECT * FROM ip_logs ORDER BY timestamp DESC")
     ip_logs = cursor.fetchall()
 
@@ -2454,19 +2472,19 @@ def all_logs():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch total count
+    # fetch total count
     cursor.execute("SELECT COUNT(*) FROM ip_logs")
     total_count = cursor.fetchone()[0]
     total_pages = (total_count + per_page - 1) // per_page
 
-    # Fetch logs for current page
+    # fetch logs for current page
     cursor.execute(
         "SELECT username, ip, timestamp, page FROM ip_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         (per_page, offset),
     )
     logs_rows = cursor.fetchall()
 
-    # Convert to list of dicts
+    # convert to list of dicts
     all_logs = [
         {
             "username": row["username"],
@@ -2479,7 +2497,7 @@ def all_logs():
 
     conn.close()
 
-    # Determine if there are next/previous pages
+    # determine if there are next or previous pages
     has_prev = page > 1
     has_next = page < total_pages
 
@@ -2500,18 +2518,18 @@ def user_logs(username):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Fetch all users for the dropdown/navigation
+    # fetch all users
     cursor.execute("SELECT username FROM users")
     users = [row["username"] for row in cursor.fetchall()]
 
-    # Fetch IP logs for the specific user
+    # fetch ip logs for the specific user
     cursor.execute(
         "SELECT ip, timestamp, page FROM ip_logs WHERE username = ? ORDER BY timestamp DESC",
         (username,),
     )
     logs = cursor.fetchall()
 
-    # Convert logs to list of dicts for easier use in template
+    # convert logs to list of dicts for easier use in template
     user_logs_list = [
         {"ip": row["ip"], "timestamp": row["timestamp"], "page": row["page"]}
         for row in logs
