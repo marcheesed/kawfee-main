@@ -26,14 +26,14 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.23              #
+#            KAWFEE 1.25              #
 #            @marcheesed              #
 #                                     #
 # #####################################
 
 
 def get_db_connection():
-    conn = sqlite3.connect("new.db", check_same_thread=False)
+    conn = sqlite3.connect("kawfee.db", check_same_thread=False)
     conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
     conn.row_factory = sqlite3.Row
     return conn
@@ -133,7 +133,7 @@ app.secret_key = "your_secret_key"
 os.makedirs(os.path.join(app.static_folder, "pfps"), exist_ok=True)
 
 # remember to update when policy updates
-CURRENT_POLICY_VERSION = 2
+CURRENT_POLICY_VERSION = 3
 
 ALLOWED_TAGS = [
     "b",
