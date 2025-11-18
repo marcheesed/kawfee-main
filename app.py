@@ -2,9 +2,10 @@ import ast
 import json
 import os
 import re
+import secrets
 import sqlite3
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import bcrypt
@@ -25,14 +26,14 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.21              #
+#            KAWFEE 1.23              #
 #            @marcheesed              #
 #                                     #
 # #####################################
 
 
 def get_db_connection():
-    conn = sqlite3.connect("kawfee.db", check_same_thread=False)
+    conn = sqlite3.connect("new.db", check_same_thread=False)
     conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
     conn.row_factory = sqlite3.Row
     return conn
@@ -207,6 +208,10 @@ def sanitize_note_content(content):
     )
 
 
+def generate_invite_code():
+    return secrets.token_urlsafe(16)  # 16 bytes URL-safe token
+
+
 def get_client_ip():
     if request.headers.get("X-Forwarded-For"):
         # x-forwarded-for can contain multiple ips so we'll be taking the first one
@@ -349,6 +354,59 @@ def check_ban():
         abort(403)
 
 
+def get_user_invite_code(username, bypass_limit=False):
+    today_str = date.today().isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if there's an invite code for today
+    cursor.execute(
+        "SELECT invite_code, date FROM user_invite_codes WHERE username = ?",
+        (username,),
+    )
+    row = cursor.fetchone()
+
+    # If bypass_limit is True, always generate a new code
+    if bypass_limit:
+        invite_code = generate_invite_code()
+        # Save or update record
+        if row:
+            cursor.execute(
+                "UPDATE user_invite_codes SET invite_code = ?, date = ? WHERE username = ?",
+                (invite_code, today_str, username),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO user_invite_codes (username, invite_code, date) VALUES (?, ?, ?)",
+                (username, invite_code, today_str),
+            )
+        conn.commit()
+        conn.close()
+        return invite_code
+
+    # Normal behavior: only generate new code if no code for today
+    if row and row["date"] == today_str:
+        invite_code = row["invite_code"]
+    else:
+        # Generate new code
+        invite_code = generate_invite_code()
+        # Save or update record
+        if row:
+            cursor.execute(
+                "UPDATE user_invite_codes SET invite_code = ?, date = ? WHERE username = ?",
+                (invite_code, today_str, username),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO user_invite_codes (username, invite_code, date) VALUES (?, ?, ?)",
+                (username, invite_code, today_str),
+            )
+        conn.commit()
+
+    conn.close()
+    return invite_code
+
+
 def get_site_info():
     conn = get_db_connection()
     site_info = conn.execute("SELECT * FROM site_info LIMIT 1").fetchone()
@@ -412,6 +470,64 @@ def update_user_password(username, hashed_password):
 
 def is_logged_in():
     return "username" in session
+
+
+@app.route("/admin/generate_invite", methods=["POST"])
+def generate_invite():
+    if not is_admin():
+        abort(403)
+
+    # Generate the invite code
+    new_code = generate_invite_code()
+    created_at = datetime.now().isoformat()
+
+    # Insert into database
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO invite_codes (code, created_at, used, redeemed_by) VALUES (?, ?, 0, NULL)",
+        (new_code, created_at),
+    )
+    conn.commit()
+    conn.close()
+
+    # Get current user info based on session
+    username = session.get("username")
+    user = None
+    if username:
+        user = get_user(username)
+
+    # Render the invite result template with user info
+    return render_template(
+        "admin/invite_result.html",
+        code=new_code,
+        user=user,
+        username=username,
+        is_logged_in=is_logged_in(),
+        is_admin=is_admin(),
+    )
+
+
+@app.route("/admin/invite_codes")
+def show_all_invite_codes():
+    if not is_admin():
+        abort(403)
+    conn = get_db_connection()
+    invite_codes = conn.execute("SELECT * FROM invite_codes").fetchall()
+    conn.close()
+
+    username = session.get("username")
+    user = None
+    if username:
+        user = get_user(username)
+
+    return render_template(
+        "admin/invite_codes.html",
+        invite_codes=invite_codes,
+        is_logged_in=is_logged_in(),
+        is_admin=is_admin(),
+        user=user,
+        username=username,
+    )
 
 
 @app.route("/accept_changes", methods=["POST"])
@@ -486,7 +602,7 @@ def index():
             if tags_data.strip():
                 try:
                     f["tags"] = json.loads(tags_data)
-                except:
+                except json.JSONDecodeError:
                     f["tags"] = []
             else:
                 f["tags"] = []
@@ -499,7 +615,7 @@ def index():
             if fandoms_data.strip():
                 try:
                     f["fandoms"] = json.loads(fandoms_data)
-                except:
+                except json.JSONDecodeError:
                     f["fandoms"] = []
             else:
                 f["fandoms"] = []
@@ -744,34 +860,51 @@ def filter_by_single_tag(tag):
     )
 
 
-# refactor for public release, but for now this is fine
-
-ALLOWED_USERNAMES = [
-    "cammy",
-    "offiz",
-    "seal",
-    "moonajauna",
-    "fizzypoppeaches",
-    "toydinosaurs",
-    "chimerathing",
-    "yuri",
-]
-
-
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
+        invite_code_input = request.form.get("invite_code", "").strip()
 
-        ##### remember to remove this for public release
-        # check if username is in allowed list
-        if username not in ALLOWED_USERNAMES:
-            abort(403)
+        conn = get_db_connection()  # Open connection once
 
-        # check if username exists in the database
+        # Validate invite code if provided
+        if invite_code_input:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM invite_codes WHERE code = ?", (invite_code_input,)
+            )
+            code_record = cursor.fetchone()
+
+            if not code_record:
+                conn.close()
+                return render_template(
+                    "register.html",
+                    error="Invalid invite code.",
+                    user=session.get("username"),
+                    is_admin=is_admin(),
+                    username="",
+                    session=session,
+                    logged_in=logged_in(),
+                )
+
+            if code_record["used"]:
+                conn.close()
+                return render_template(
+                    "register.html",
+                    error="Invite code already used.",
+                    user=session.get("username"),
+                    is_admin=is_admin(),
+                    username="",
+                    session=session,
+                    logged_in=logged_in(),
+                )
+
+        # check if username exists
         existing_user = get_user(username)
         if existing_user:
+            conn.close()
             abort(400)
 
         # hash the password
@@ -779,10 +912,10 @@ def register():
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
 
-        # get ip
+        # get IP
         ip_address = request.remote_addr
 
-        # prep user data
+        # prepare user data
         user_data = {
             "username": username,
             "password": hashed_password,
@@ -792,20 +925,32 @@ def register():
             "custom_css": "",
             "display_name": "",
             "ip": ip_address,
-            "privacy_policy_version": CURRENT_POLICY_VERSION,  # track the version at registration
+            "privacy_policy_version": CURRENT_POLICY_VERSION,
         }
 
-        # save new user to database
+        # save user
         create_user(user_data)
 
-        # log ip
+        # Mark invite code as used if provided
+        if invite_code_input:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE invite_codes SET used = 1, redeemed_by = ? WHERE code = ?",
+                (username, invite_code_input),
+            )
+            conn.commit()
+
+        conn.close()
+
+        # log IP
         log_ip(username=session.get("username"), page=request.path)
 
-        # log user in
+        # log in user
         session["username"] = username
 
         return redirect(url_for("index"))
 
+    # For GET request, pass parameters explicitly
     return render_template(
         "register.html",
         user=session.get("username"),
@@ -813,6 +958,7 @@ def register():
         username="",
         session=session,
         logged_in=logged_in(),
+        error=None,  # you can pass error messages if needed
     )
 
 

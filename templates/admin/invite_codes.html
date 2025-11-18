@@ -1,16 +1,15 @@
 <!doctype html>
 <html>
     <head>
-        <meta charset="UTF-8" />
-        <title>Register</title>
+        <title>All Invite Codes</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
         <link
             rel="icon"
             href="{{ url_for('static', filename='favicon.webp') }}"
             type="image/x-icon"
-        />
-        <link
-            rel="stylesheet"
-            href="{{ url_for('static', filename='style.css') }}"
         />
     </head>
     <body>
@@ -93,7 +92,8 @@
                 <p>
                     Logged in as
                     <a href="{{ url_for('profile') }}"
-                        >{{ session['username'] }}</a
+                        >{{ session.get('username', 'No username in session')
+                        }}</a
                     >
                 </p>
                 {% else %}
@@ -103,58 +103,45 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="container-1">
-                <h1>Register</h1>
-                <form method="POST">
-                    <label>Username</label><br />
-                    <input type="text" name="username" required /><br />
-
-                    <label>Password</label><br />
-                    <input type="password" name="password" required /><br />
-
-                    <!-- Invite Code Input -->
-                    <label for="invite_code">Invite Code</label><br />
-                    <input
-                        type="text"
-                        id="invite_code"
-                        name="invite_code"
-                        placeholder="Enter invite code"
-                        required
-                    /><br />
-
-                    <label>
-                        <input type="checkbox" name="agree" required />
-                        I have read and acknowledged the
-                        <a href="{{ url_for('tos') }}"
-                            >Terms of Service</a
-                        > </label
-                    ><br />
-
-                    <label>
-                        <input type="checkbox" name="agree" required />
-                        I have read and acknowledged the
-                        <a href="{{ url_for('privacy') }}"
-                            >Privacy Policy</a
-                        > </label
-                    ><br /><br />
-
-                    <button type="submit">Register</button>
-                </form>
+            <div class="container-2">
+                <h1>All Invite Codes</h1>
+                <table border="1" cellpadding="5" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Created At</th>
+                            <th>Used</th>
+                            <th>Redeemed By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for code in invite_codes %}
+                        <tr>
+                            <td>{{ code['code'] }}</td>
+                            <td>{{ code['created_at'] }}</td>
+                            <td>{{ 'Yes' if code['used'] else 'No' }}</td>
+                            <td>
+                                {{ code['redeemed_by'] if code['redeemed_by']
+                                else 'N/A' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-
+            <p>
             <div class="site-footer">
                 <p>
-                    <a href="{{ url_for('index') }}">Index</a>
-                    {% if logged_in %} --
-                    <a href="{{ url_for('logout') }}">Logout</a> {% endif %} {%
-                    if is_owner %} --
-                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a> {%
-                    endif %} {% if is_admin %} --
+                    <a href="{{ url_for('index') }}">Index</a> {% if logged_in
+                    %} --- <a href="{{ url_for('logout') }}">Logout</a> {% endif
+                    %} ---
+                    <a href="{{ url_for('all_logs') }}">View All Logs</a> {% if
+                    is_admin %} ---
                     <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
                     {% endif %}
                 </p>
             </div>
+            </p>
         </div>
-        <script src="{{ url_for('static', filename='theme.js') }}"></script>
     </body>
 </html>
