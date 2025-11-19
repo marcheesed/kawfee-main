@@ -323,3 +323,133 @@ button {
     background-color: var(--button-hover-bg);
     color: white;
 }
+
+/* Mobile styles */
+@media (max-width: 768px) {
+    .index-container {
+        flex-direction: column;
+        width: 100%;
+        height: auto;
+    }
+
+    body {
+        width: 100%;
+        height: auto;
+    }
+
+    .introduction,
+    .tags-filter,
+    .update-container,
+    .fanfic-container {
+        width: 100%;
+        height: auto;
+    }
+
+    /* Adjust font sizes for better readability on small screens */
+    h1 {
+        font-size: 2em;
+    }
+
+    h2 {
+        font-size: 1.5em;
+    }
+
+    h3 {
+        font-size: 1.2em;
+    }
+
+    h4 {
+        font-size: 1em;
+    }
+
+    p {
+        font-size: 1em;
+    }
+
+    /* Make input fields and buttons full width for easier use */
+    input {
+        width: 100%;
+        height: auto;
+    }
+
+    button {
+        width: 100%;
+        padding: 0.8em;
+    }
+
+    /* Reduce spacing and margins if necessary */
+    .site-header,
+    .site-footer {
+        flex-direction: column;
+        align-items: center;
+        height: auto;
+        width: 180%;
+    }
+
+    /* Optional: hide or rearrange some elements for small screens */
+}
+
+/* Mobile styles */
+@media (max-width: 1200px) {
+    .index-container {
+        flex-direction: column;
+        width: 100%;
+        height: auto;
+    }
+
+    body {
+        width: 100%;
+        height: auto;
+    }
+
+    .introduction,
+    .tags-filter,
+    .update-container,
+    .fanfic-container {
+        width: 100%;
+        height: auto;
+    }
+
+    /* Adjust font sizes for better readability on small screens */
+    h1 {
+        font-size: 2em;
+    }
+
+    h2 {
+        font-size: 1.5em;
+    }
+
+    h3 {
+        font-size: 1.2em;
+    }
+
+    h4 {
+        font-size: 1em;
+    }
+
+    p {
+        font-size: 1em;
+    }
+
+    /* Make input fields and buttons full width for easier use */
+    input {
+        width: 100%;
+        height: auto;
+    }
+
+    button {
+        width: 100%;
+        padding: 0.8em;
+    }
+
+    /* Reduce spacing and margins if necessary */
+    .site-header,
+    .site-footer {
+        flex-direction: column;
+        align-items: center;
+        height: auto;
+        width: 180%;
+    }
+
+    /* Optional: hide or rearrange some elements for small screens */
+}
