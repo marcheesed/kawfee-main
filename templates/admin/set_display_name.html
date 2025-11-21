@@ -109,6 +109,11 @@
             <p style="color: red">{{ error }}</p>
             {% endif %}
             <form method="post">
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                />
                 <label for="display_name">Display Name:</label>
                 <input
                     type="text"

@@ -110,6 +110,11 @@
             <div class="container-2">
                 <h2>Create a New Note</h2>
                 <form method="post">
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    />
                     <label for="json-input" style="display: none"
                         >Note Content</label
                     >

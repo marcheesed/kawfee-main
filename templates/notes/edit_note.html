@@ -102,6 +102,11 @@
             <div class="container-2">
                 <h1>Edit Note {{ note_id }}</h1>
                 <form method="POST">
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    />
                     <textarea name="content" rows="25" cols="30">
 {{ content }}</textarea
                     >

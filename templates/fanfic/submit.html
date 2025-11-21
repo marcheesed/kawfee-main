@@ -108,6 +108,11 @@
                 <br />
                 <div class="submit-card">
                     <form method="POST" id="fanfic-form">
+                        <input
+                            type="hidden"
+                            name="csrf_token"
+                            value="{{ csrf_token() }}"
+                        />
                         <!-- Hidden input to store tags as JSON -->
                         <input type="hidden" name="tags" id="tags-hidden" />
 

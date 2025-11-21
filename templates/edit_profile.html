@@ -71,6 +71,7 @@
 
       <!-- Main Profile Edit Form -->
       <form method="POST" enctype="multipart/form-data" action="{{ url_for('edit_profile') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <!-- Profile Picture -->
         <div style="padding-top: 10px">
           <label for="pfp">Profile Picture:</label>

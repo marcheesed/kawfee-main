@@ -107,6 +107,7 @@
                 method="post"
                 action="{{ url_for('edit_blog_post', post_id=post_id) }}"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="title">Title:</label><br />
                 <input
                     type="text"

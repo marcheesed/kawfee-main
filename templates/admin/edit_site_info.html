@@ -105,6 +105,11 @@
             <div class="container-2">
                 <h1>Edit Site Information</h1>
                 <form method="post" action="{{ url_for('edit_site_info') }}">
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    />
                     <label for="title">Title:</label><br />
                     <input
                         type="text"

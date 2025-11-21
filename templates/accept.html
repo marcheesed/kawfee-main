@@ -1,0 +1,19 @@
+<!-- templates/accept_changes.html -->
+<!doctype html>
+<html>
+    <head>
+        <title>Accept Changes</title>
+    </head>
+    <body>
+        <h1>Privacy Policy or Terms of Service Update</h1>
+        <p>
+            We have updated our privacy policy or terms of service. Please
+            review and accept to continue.
+        </p>
+        <!-- You can include the privacy policy details here -->
+        <form method="POST" action="{{ url_for('accept_changes') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit">Accept</button>
+        </form>
+    </body>
+</html>

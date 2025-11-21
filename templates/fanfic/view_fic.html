@@ -159,6 +159,11 @@
                     action="{{ url_for('add_kudo', fid=fic.id) }}"
                     style="margin-top: -10px"
                 >
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    />
                     <br />
                     <button type="submit">Give Kudos</button>
                 </form>
@@ -197,6 +202,11 @@
                                 action="{{ url_for('delete_comment', fid=fic.id, comment_index=loop.index0) }}"
                                 style="display: inline"
                             >
+                                <input
+                                    type="hidden"
+                                    name="csrf_token"
+                                    value="{{ csrf_token() }}"
+                                />
                                 <button type="submit">Delete</button>
                             </form>
                             {% endif %}
@@ -215,6 +225,11 @@
                     method="POST"
                     action="{{ url_for('add_comment', fid=fic.id) }}"
                 >
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    />
                     <br />
                     <textarea
                         name="content"

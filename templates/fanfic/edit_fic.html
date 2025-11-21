@@ -98,6 +98,7 @@
         <h1>Edit {{ fic.title }}</h1>
         <!-- Main form for editing fanfic -->
         <form method="POST" id="edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Title</label><br />
             <input type="text" name="title" value="{{ fic.title }}" required /><br />
 

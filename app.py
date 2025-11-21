@@ -20,13 +20,14 @@ from flask import (
     session,
     url_for,
 )
+from flask_wtf import CSRFProtect
 from jinja2 import pass_environment
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.25              #
+#            KAWFEE 1.28              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -129,6 +130,12 @@ note: Any = None
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
+
+app.config["WTF_CSRF_SECRET_KEY"] = "IeV86ag6-E6Y9gi4WMH68OmR2ExY2VO5KQPs8lSn5XA"
+
+csrf = CSRFProtect(app)
+
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=31)
 
 os.makedirs(os.path.join(app.static_folder, "pfps"), exist_ok=True)
 
@@ -344,6 +351,11 @@ def forbidden(e):
 @app.errorhandler(400)
 def handle_400(error):
     return render_template("errors/400.html"), 400
+
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 
 @app.before_request
