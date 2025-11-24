@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.38              #
+#            KAWFEE 1.41              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -2191,6 +2191,30 @@ def view_note(note_id):
         is_owner=True,
         is_admin=is_admin(),
     )
+
+
+@app.route("/admin/delete_user/<username>", methods=["POST"])
+def delete_user(username):
+    if not is_admin():
+        abort(403)
+
+    # fetch user from database
+    user = get_user(username)
+    if not user:
+        abort(404)
+
+    # delete user from database
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
+    except Exception as e:
+        # log error if needed
+        return f"Error deleting user: {str(e)}", 500
+    finally:
+        conn.close()
+
+    return redirect(url_for("admin_panel"))
 
 
 @app.route("/notes/new", methods=["GET", "POST"])
