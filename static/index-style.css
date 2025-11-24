@@ -363,7 +363,6 @@ button {
         height: auto;
     }
 
-    /* Adjust font sizes for better readability on small screens */
     h1 {
         font-size: 2em;
     }
@@ -385,7 +384,6 @@ button {
     }
 }
 
-/* Mobile styles */
 @media (max-width: 1350px) {
     .index-container {
         flex-direction: column;
@@ -410,7 +408,6 @@ button {
         height: auto;
     }
 
-    /* Adjust font sizes for better readability on small screens */
     h1 {
         font-size: 2em;
     }
