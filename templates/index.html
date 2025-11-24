@@ -10,6 +10,7 @@
         />
         <meta content="width=device-width, initial-scale=1.0" name="viewport">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
     </head>
     <body>
         <div class="container">
@@ -203,25 +204,26 @@
         </div>
         {% if show_policy_popup %}
         <script>
-            if ({{ show_policy_popup|tojson }}) {
-                if (confirm("The privacy policy has been updated. Do you accept?")) {
-                    // User clicked OK, send AJAX to update version
-                    fetch('/accept_changes', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({})
-                    }).then(response => {
-                        if (response.ok) {
-                            // Refresh or hide popup
-                            location.reload();
-                        } else {
-                            alert('Error updating privacy policy.');
-                        }
-                    });
-                }
+        if ({{ show_policy_popup|tojson }}) {
+            if (confirm("The privacy policy has been updated. Do you accept?")) {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                fetch('/accept_changes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken // or 'X-CSRF-Token' depending on your setup
+                    },
+                    body: JSON.stringify({})
+                }).then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Error updating privacy policy.');
+                    }
+                });
             }
+        }
         </script>
         {% endif %}
 

@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.28              #
+#            KAWFEE 1.38              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -1937,28 +1937,50 @@ def admin_panel():
 # add it so it deletes fics, notes, comments etc
 
 
-@app.route("/admin/delete_user/<username>", methods=["POST"])
-def delete_user(username):
-    if not is_admin():
-        abort(403)
+@app.route("/delete_my_profile", methods=["POST"])
+def delete_my_profile():
+    if "username" not in session:
+        abort(401)
 
-    # fetch user from database
-    user = get_user(username)
-    if not user:
-        abort(404)
-
-    # delete user from database
+    username = session["username"]
     conn = get_db_connection()
+
     try:
-        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        # Fetch user id
+        user = conn.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if not user:
+            abort(404)
+        user_id = user["id"]
+
+        # Fetch all fanfics by username
+        fanfics = conn.execute(
+            "SELECT id FROM fanfics WHERE author = ?", (username,)
+        ).fetchall()
+
+        # Delete each fanfic and related data
+        for fanfic in fanfics:
+            fic_id = fanfic["id"]
+            conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
+            conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fic_id,))
+            conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
+
+        # Delete IP logs associated with user
+        conn.execute("DELETE FROM ip_logs WHERE user_id = ?", (user_id,))
+        # Delete user
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
+
+        # Clear session
+        session.clear()
+
     except Exception as e:
-        # log error if needed
-        return f"Error deleting user: {str(e)}", 500
+        return f"Error deleting your profile and data: {str(e)}", 500
     finally:
         conn.close()
 
-    return redirect(url_for("admin_panel"))
+    return redirect(url_for("index"))
 
 
 @app.route("/admin/delete_fic/<int:fic_id>", methods=["POST"])

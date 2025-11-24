@@ -100,9 +100,9 @@
           <input type="password" name="current_password" placeholder="Current Password" required />
           <input type="password" name="new_password" placeholder="New Password" />
         </div>
-
+<div class="buttons-flex">
         <!-- Save Button (single button for all changes) -->
-        <div style="margin-top:20px;">
+        <div>
           <button
             type="submit"
             onclick="return confirm('Are you sure you want to save these changes?');"
@@ -110,8 +110,17 @@
             Save Profile Changes
           </button>
         </div>
+
       </form>
 
+      <!-- Add this button inside your profile container, perhaps after the form -->
+      <form method="POST" action="{{ url_for('delete_my_profile') }}" onsubmit="return confirm('Are you sure you want to delete your account? This action cannot be undone, and includes all of your data.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="background-color: red; color: white; padding: 10px; border: none; cursor: pointer;">
+              Delete My Account
+          </button>
+      </form>
+    </div>
       <div class="site-footer" style="margin-top:40px;">
         <p>
           <a href="{{ url_for('index') }}">Index</a>
