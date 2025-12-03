@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.43              #
+#            KAWFEE 1.44              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -1976,7 +1976,7 @@ def admin_panel():
     )
 
 
-# add it so it deletes fics, notes, comments etc
+# todo - comments cant be deleted this way due to how theyre saved. likely needs a rework in the future.
 
 
 @app.route("/delete_my_profile", methods=["POST"])
@@ -2001,20 +2001,24 @@ def delete_my_profile():
             "SELECT id FROM fanfics WHERE author = ?", (username,)
         ).fetchall()
 
-        # Delete each fanfic and related data
+        # delete each fanfic and related data
         for fanfic in fanfics:
             fic_id = fanfic["id"]
             conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
             conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fic_id,))
             conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
 
-        # Delete IP logs associated with user
+        # delete notes associated with the user
+        conn.execute("DELETE FROM notes WHERE owner = ?", (username,))
+
+        # delete IP logs associated with user
         conn.execute("DELETE FROM ip_logs WHERE user_id = ?", (user_id,))
-        # Delete user
+
+        # delete user
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
 
-        # Clear session
+        # clear session / logout user
         session.clear()
 
     except Exception as e:
@@ -2240,21 +2244,40 @@ def delete_user(username):
     if not is_admin():
         abort(403)
 
-    # fetch user from database
     user = get_user(username)
     if not user:
         abort(404)
 
-    # delete user from database
+    user_id = user["id"]
     conn = get_db_connection()
     try:
-        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        # Delete fanfics and related data
+        fanfics = conn.execute(
+            "SELECT id FROM fanfics WHERE author = ?", (username,)
+        ).fetchall()
+        for fanfic in fanfics:
+            fic_id = fanfic["id"]
+            conn.execute("DELETE FROM fanfics WHERE id = ?", (fic_id,))
+            conn.execute("DELETE FROM chapters WHERE fanfic_id = ?", (fic_id,))
+            conn.execute("DELETE FROM fanfic_tags WHERE fanfic_id = ?", (fic_id,))
+
+        # Delete notes associated with the user
+        conn.execute("DELETE FROM notes WHERE owner = ?", (username,))
+
+        # Delete IP logs for the user
+        conn.execute("DELETE FROM ip_logs WHERE user_id = ?", (user_id,))
+
+        # Delete the user record itself
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
         conn.commit()
     except Exception as e:
-        # log error if needed
-        return f"Error deleting user: {str(e)}", 500
+        return f"Error deleting user data: {str(e)}", 500
     finally:
         conn.close()
+
+    # Optionally, clear session if the user is deleting themselves (not in this route)
+    # session.clear()
 
     return redirect(url_for("admin_panel"))
 
@@ -2709,7 +2732,6 @@ def show_logs():
     return render_template(
         "admin/logs.html",
         logs=ip_logs,
-        user_logs=user_logs,
         username=username,
         users=users_list,
         is_admin=is_admin(),
