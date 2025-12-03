@@ -134,11 +134,16 @@
                                 action="{{ url_for('ban_ip') }}"
                                 method="post"
                                 style="display:inline-block; margin-left:10px;"
-                                onsubmit="return confirm('Are you sure you want to ban IP {{ user_ips.get(user['username'], 'Unknown') }}?');"
+                                onsubmit="return confirm('Are you sure you want to {{ 'unban' if user_ips.get(user['username'], 'Unknown') in banned_ips else 'ban' }} IP {{ user_ips.get(user['username'], 'Unknown') }}?');"
                             >
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="ip" value="{{ user_ips.get(user['username'], 'Unknown') }}">
-                                <button type="submit">Ban IP</button>
+
+                                {% if user_ips.get(user['username'], 'Unknown') in banned_ips %}
+                                    <button type="submit">Unban IP</button>
+                                {% else %}
+                                    <button type="submit">Ban IP</button>
+                                {% endif %}
                             </form>
                         </li>
                     </div>

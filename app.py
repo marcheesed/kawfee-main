@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.41              #
+#            KAWFEE 1.43              #
 #            @marcheesed              #
 #                                     #
 # #####################################
@@ -321,24 +321,65 @@ def get_banned_ips():
 
 def is_ip_banned(ip):
     conn = get_db_connection()
-    result = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
+    ip_str = ip.lower()
+
+    # check if v6
+    if ":" in ip_str:
+        ip_str = ip_str[:8]
+    # for v4 compare full address
+
+    result = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip_str,)).fetchone()
     conn.close()
     return result is not None
 
 
-def save_banned_ip(ip):
+def save_banned_ip(ip, username=None):
     conn = get_db_connection()
-    # check if ip already exists to prevent duplicates
-    existing = conn.execute("SELECT 1 FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
+    ip_str = ip.lower()
+
+    # Check if IPv6 (contains ":")
+    if ":" in ip_str:
+        ip_str = ip_str[:8]  # store only the first 8 characters
+
+    # Check if the IP+username combination already exists
+    if username:
+        existing = conn.execute(
+            "SELECT 1 FROM banned_ips WHERE ip = ? AND username = ?", (ip_str, username)
+        ).fetchone()
+    else:
+        existing = conn.execute(
+            "SELECT 1 FROM banned_ips WHERE ip = ? AND username IS NULL", (ip_str,)
+        ).fetchone()
+
+    # Insert if not exists
     if not existing:
-        conn.execute("INSERT INTO banned_ips (ip) VALUES (?)", (ip,))
-        conn.commit()
+        if username:
+            conn.execute(
+                "INSERT INTO banned_ips (ip, username) VALUES (?, ?)",
+                (ip_str, username),
+            )
+        else:
+            conn.execute("INSERT INTO banned_ips (ip) VALUES (?)", (ip_str,))
+    conn.commit()
     conn.close()
 
 
-def unban_ip(ip):
+def unban_ip(ip, username=None):
     conn = get_db_connection()
-    conn.execute("DELETE FROM banned_ips WHERE ip = ?", (ip,))
+    ip_str = ip.lower()
+
+    # Check if IPv6 (contains ":")
+    if ":" in ip_str:
+        ip_str = ip_str[:8]
+
+    if username:
+        # Delete specific IP+username record
+        conn.execute(
+            "DELETE FROM banned_ips WHERE ip = ? AND username = ?", (ip_str, username)
+        )
+    else:
+        # Delete all records with this IP (regardless of username)
+        conn.execute("DELETE FROM banned_ips WHERE ip = ?", (ip_str,))
     conn.commit()
     conn.close()
 
@@ -1931,6 +1972,7 @@ def admin_panel():
         user_ips=user_ips,
         users=users,
         user_logs=None,
+        banned_ips=get_banned_ips(),
     )
 
 
