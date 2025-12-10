@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 #######################################
 #                                     #
-#            KAWFEE 1.45              #
+#            KAWFEE 1.46              #
 #            @marcheesed              #
 #                                     #
 # #####################################
