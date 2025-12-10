@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect(r"dev_data.db")
+conn = sqlite3.connect(r"dev_data5.db")
 cursor = conn.cursor()
 
 # Users table
@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     pfp TEXT,
     custom_css TEXT,
     display_name TEXT,
-    ip TEXT
+    ip TEXT,
+    privacy_policy_version INTEGER DEFAULT 0
 )
 """)
 
@@ -36,7 +37,8 @@ CREATE TABLE IF NOT EXISTS fanfics (
     fandom TEXT,
     age_rating TEXT,
     comments TEXT,
-    kudos TEXT
+    kudos TEXT,
+    content TEXT
 )
 """)
 
@@ -48,17 +50,6 @@ CREATE TABLE IF NOT EXISTS fanfic_tags (
     PRIMARY KEY (fanfic_id, tag_id),
     FOREIGN KEY (fanfic_id) REFERENCES fanfics(id),
     FOREIGN KEY (tag_id) REFERENCES tags(id)
-)
-""")
-
-# Chapters
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS chapters (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fanfic_id INTEGER,
-    title TEXT,
-    content TEXT,
-    FOREIGN KEY (fanfic_id) REFERENCES fanfics(id)
 )
 """)
 
@@ -133,6 +124,16 @@ CREATE TABLE IF NOT EXISTS banned_ips (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip TEXT UNIQUE,
     username TEXT
+)
+""")
+
+# invite codes
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT,
+    created_at TIMESTAMP,
+    used BOOLEAN DEFAULT 0,
+    redeemed_by TEXT
 )
 """)
 
